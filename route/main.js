@@ -16,10 +16,22 @@ import express from 'express';
     manually as this is ignored by git
 */
 import dotenv from 'dotenv' 
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+/*Sets up the main dir path and sets it up*/
+const main_project_dir = path.join(__dirname, "..");
+
 
 dotenv.config({path: '../env/.env'});/*Do create the file*/
 
 const app = express();
 const port = process.env.PORT_ROBOT; /*Do not hardcode the port here*/
 
-console.log(port);
+console.log(main_project_dir);
+app.listen(port,() => {
+    console.log(`App running at port ${port}`)
+});

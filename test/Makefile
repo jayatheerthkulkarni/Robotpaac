@@ -5,11 +5,17 @@
 # Running tests sequence in the test target
 # Add your test commands here in sequence please add 
 # "++++" before your test that makes it clear
+# Test case format
+# 1. #++++
+# 2. @echo "What does your test do"
+# 3. chmod +x ./filename
+# 4. @./filename
 test:
 	#++++
 	@echo "Running tests..."
 	#++++
 	@echo "Running setup..."
+	@chmod +x ./setup.sh
 	@./setup.sh
 	#++++
 

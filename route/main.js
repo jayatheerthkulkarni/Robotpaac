@@ -11,10 +11,15 @@
 */
 
 import express from 'express';
-import dotenv from 'dotenv'
+/*  
+    Please fill all the env vars in /env/.env (Create the dir
+    manually as this is ignored by git
+*/
+import dotenv from 'dotenv' 
 
-dotenv.config();
+dotenv.config({path: '../env/.env'});/*Do create the file*/
 
 const app = express();
 const port = process.env.PORT_ROBOT; /*Do not hardcode the port here*/
 
+console.log(port);

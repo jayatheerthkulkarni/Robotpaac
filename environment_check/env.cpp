@@ -1,0 +1,6 @@
+/*
+    Used for checking if all the environment variables
+    exists or not.
+
+    Run make to properly start all the code
+*/

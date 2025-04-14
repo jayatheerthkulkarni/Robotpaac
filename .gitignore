@@ -1,4 +1,4 @@
-# Please fill the following options in /env/.env
-# 1. PORT
+
 /env
 /database_location
+*.o

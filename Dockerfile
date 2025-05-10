@@ -1,25 +1,22 @@
-FROM fedora:latest
+FROM fedora:42
 
-# Install system tools (including make)
-RUN dnf install -y \
-    gcc \
-    g++ \
-    make \
-    curl \
-    git \
-    unzip
+RUN dnf -y update --refresh \
+ && dnf install -y \
+      gcc \
+      g++ \
+      make \
+      curl \
+      git \
+      sqlite \
+      unzip \
+ && dnf clean all
 
 # Install bun
 RUN curl -fsSL https://bun.sh/install | bash
 
-# Add bun to PATH
 ENV PATH="/root/.bun/bin:$PATH"
 
-# Create app directory
 WORKDIR /app
-
-# Copy local project files
 COPY . .
 
-# Use the exec form for CMD to avoid the warning
 CMD ["bash", "-c", "make --version && make dev"]

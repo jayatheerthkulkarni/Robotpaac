@@ -43,4 +43,5 @@ app.get("/", (req, res) => {
 
 app.listen(port,() => {
     console.log(`App running at port ${port}`)
+    console.log(`visit https://localhost:3333`);
 });

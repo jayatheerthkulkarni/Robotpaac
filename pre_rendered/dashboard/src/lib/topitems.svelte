@@ -1,16 +1,63 @@
 <script>
 	import { onMount } from 'svelte';
 	import Chart from 'chart.js/auto';
+	import axios from 'axios';
 
+	let canvas;
+	let chartInstance;
 
+	let attr1 = [];
+	let attr2 = [];
+
+	let chartData = {
+		labels: [],
+		datasets: [{
+			label: 'Items Sold',
+			data: [],
+			backgroundColor: ['#ff6384', '#36a2eb', '#ffce56', '#cc65fe', '#2ecc71']
+		}]
+	};
+
+	export let type = 'pie';
+
+	async function data_call() {
+		try {
+			const response = await axios.get('http://localhost:3000/api/data/top/five/batches');
+			const data_fetched = response.data;
+			attr1 = data_fetched.map(d => d.batchcode);
+			attr2 = data_fetched.map(d => d.total_sold);
+
+			chartData.labels = attr1;
+			chartData.datasets[0].data = attr2;
+
+			if (chartInstance) {
+				chartInstance.destroy();
+			}
+
+			chartInstance = new Chart(canvas, {
+				type,
+				data: chartData,
+				options: {
+					responsive: true,
+					maintainAspectRatio: false
+				}
+			});
+		} catch (error) {
+			console.error('Error fetching data:', error);
+		}
+	}
+
+	onMount(() => {
+		data_call();
+	});
 </script>
 
 <div class="parent">
 	<div class="div1">
-		<p class="main">Top Items sold</p>
+		<p class="main">Top Batches Sold</p>
 	</div>
 	<div class="div2">
-
+		<canvas bind:this={canvas} width="400" height="400"></canvas>
 	</div>
 	<div class="div5">5</div>
 </div>
@@ -36,10 +83,10 @@
 		grid-row-start: 2;
 	}
 
-	/* .div2 canvas {
+	.div2 canvas {
 		width: 100%;
 		height: 100%;
-	} */
+	} 
 
 	.div5 {
 		grid-row: span 7 / span 7;

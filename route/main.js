@@ -18,6 +18,7 @@ import express from 'express';
 import dotenv from 'dotenv' 
 import path from 'path';
 import { fileURLToPath } from 'url';
+import databaseapi from './databaseroutes';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,11 +38,12 @@ const port = process.env.PORT_ROBOT; /*Do not hardcode the port here*/
 
 app.use(express.static(path.join(path_to_rendered)));
 
+app.use("/api/data",databaseapi);
 app.get("/", (req, res) => {
     res.sendFile(path_to_rendered_home);
 });
 
 app.listen(port,() => {
     console.log(`App running at port ${port}`)
-    console.log(`visit https://localhost:3333`);
+    console.log(`visit http://localhost:${port}`);
 });

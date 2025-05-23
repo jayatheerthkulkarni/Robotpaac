@@ -19,6 +19,7 @@ import dotenv from 'dotenv'
 import path from 'path';
 import { fileURLToPath } from 'url';
 import databaseapi from './databaseroutes';
+import cors from 'cors';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,7 +36,7 @@ dotenv.config({path: '../env/.env'});/*Do create the file*/
 
 const app = express();
 const port = process.env.PORT_ROBOT; /*Do not hardcode the port here*/
-
+app.use(cors());
 app.use(express.static(path.join(path_to_rendered)));
 
 app.use("/api/data",databaseapi);

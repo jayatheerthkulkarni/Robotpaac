@@ -28,4 +28,18 @@ router.get("/top/five/batches", (req, res) => {
 	);
 });
 
+
+router.get("/expired/total" , (req, res) => {
+	db.all(
+		"SELECT SUM(qty) FROM inventory JOIN inwards USING(batchcode) WHERE expiry < DATE('now');",
+		(err, rows) => {
+			if (err) {
+				res.status(500).json({error: "Could not fetch total quantity"});
+			} else {
+				res.json(rows);
+			}
+		}
+	);
+}); 
+
 export default router;

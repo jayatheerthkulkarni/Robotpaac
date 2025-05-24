@@ -6,15 +6,18 @@ TARGET_DIR="database_location"
 TARGET_FILE="data.db"
 FILE_PATH="$TARGET_DIR/$TARGET_FILE"
 
+# If you've already run the script and the database exists,
+# you'll need to either delete data.db for this script to re-initialize it,
+# OR manually add the column using an ALTER TABLE command.
+# For simplicity in a dev environment, deleting and re-initializing is often easiest.
+# To manually add:
+# sqlite3 "$FILE_PATH" "ALTER TABLE itemlist ADD COLUMN min_stock_level INTEGER DEFAULT 10 NOT NULL CHECK (min_stock_level >= 0);"
+
 if [ -d "$TARGET_DIR" ]; then
-  # Directory already exists → do nothing and exit cleanly
-  echo -e "\033[32mDatabase folder found please do not create this manually
-  if done delete and let it happen automatically
-  Do not delete the directory without consulting\033[0m"
+  echo -e "\033[32mDatabase folder found. If schema has changed, delete '$FILE_PATH' and re-run to apply changes, or ALTER TABLE manually.\033[0m"
   exit 0
 fi
 
-# Directory does not exist: create it and initialize the DB
 mkdir -p "$TARGET_DIR" || { echo "Error: failed to create directory."; exit 1; }
 
 sqlite3 "$FILE_PATH" <<'EOF'
@@ -23,7 +26,8 @@ PRAGMA foreign_keys = ON;
 -- 1. Item Master
 CREATE TABLE itemlist (
     itemcode VARCHAR(13) PRIMARY KEY,
-    itemname VARCHAR(50) NOT NULL
+    itemname VARCHAR(50) NOT NULL,
+    min_stock_level INTEGER NOT NULL DEFAULT 10 CHECK (min_stock_level >= 0) -- New field for reorder point
 );
 
 -- 2. Supplier Master
@@ -47,6 +51,7 @@ CREATE TABLE inwards (
     suppcode VARCHAR(13) NOT NULL,
     requestedqty INT NOT NULL,
     receivedqty INT NOT NULL,
+    purchase_price_per_unit DECIMAL(10, 2) NOT NULL CHECK (purchase_price_per_unit >= 0),
     datepurchase DATE NOT NULL,
     expiry DATE NOT NULL,
     FOREIGN KEY (itemcode) REFERENCES itemlist(itemcode),
@@ -72,6 +77,7 @@ CREATE TABLE outwards (
     batchcode VARCHAR(13) NOT NULL,
     custcode VARCHAR(13) NOT NULL,
     qty INTEGER NOT NULL CHECK(qty > 0),
+    selling_price_per_unit DECIMAL(10, 2) NOT NULL CHECK (selling_price_per_unit >= 0),
     dateout DATE NOT NULL,
     FOREIGN KEY (batchcode) REFERENCES inventory(batchcode),
     FOREIGN KEY (custcode) REFERENCES customers(custcode)
@@ -99,6 +105,14 @@ BEGIN
         WHEN (SELECT qty FROM inventory WHERE batchcode = NEW.batchcode) < 0
         THEN RAISE(ABORT, 'Inventory fell below 0. This should never happen.')
     END;
+END;
+
+-- Trigger 3: Auto-insert into inventory on new inward
+CREATE TRIGGER trg_auto_inventory_insert
+AFTER INSERT ON inwards
+BEGIN
+    INSERT INTO inventory (batchcode, itemcode, qty)
+    VALUES (NEW.batchcode, NEW.itemcode, NEW.receivedqty);
 END;
 EOF
 

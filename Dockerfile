@@ -18,5 +18,3 @@ ENV PATH="/root/.bun/bin:$PATH"
 
 WORKDIR /app
 COPY . .
-
-CMD ["bash", "-c", "make --version && make dev"]

@@ -59,7 +59,12 @@
 	<div class="div2">
 		<canvas bind:this={canvas} width="400" height="400"></canvas>
 	</div>
-	<div class="div5">5</div>
+	<div class="div5">
+		<p class="main1">Top Batches Sold: </p>
+		{#each attr1 as batch, i}
+			<p>{batch}: {attr2[i]}</p>
+		{/each}
+	</div>
 </div>
 
 <style>
@@ -86,16 +91,27 @@
 	.div2 canvas {
 		width: 100%;
 		height: 100%;
-	} 
+	}
 
 	.div5 {
+		padding-left: 0.5rem;
+		background-color: rgb(255, 255, 255);
+		position: relative;
 		grid-row: span 7 / span 7;
 		grid-column-start: 5;
 		grid-row-start: 1;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		border-radius: 10px;
 	}
 
 	.main {
 		margin-left: 1rem;
+		font-size: 1.5rem;
+	}
+	.main1 {
 		font-size: 1.5rem;
 	}
 </style>

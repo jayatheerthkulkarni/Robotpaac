@@ -1,14 +1,17 @@
-#  Inventory Database Schema
+# Inventory Database Schema
 
-This database tracks item stock, purchase inwards, and customer outwards efficiently while ensuring audit safety and real-time stock accuracy.
+A structured schema to manage **item stock**, **supplier inwards**, and **customer outwards**, while ensuring **audit integrity**, **real-time stock accuracy**, and enabling **profit calculation**.
 
 ---
 
-## Table Definitions
+## Table Structure
 
->  **Note**: Tables must be created in this exact order to satisfy foreign key dependencies.
+> **Creation Order Matters** — tables are created in dependency order to satisfy foreign keys.
+> **Pricing Fields Added** — `purchase_price_per_unit` in `inwards` and `selling_price_per_unit` in `outwards` are crucial for profit analysis.
 
-### 1. `itemlist` — Item Master
+---
+
+### 1. `itemlist` – Master List of Items
 
 ```sql
 CREATE TABLE itemlist (
@@ -17,7 +20,7 @@ CREATE TABLE itemlist (
 );
 ```
 
-### 2. `suppliers` — Supplier Master
+### 2. `suppliers` – Supplier Master
 
 ```sql
 CREATE TABLE suppliers (
@@ -27,7 +30,7 @@ CREATE TABLE suppliers (
 );
 ```
 
-### 3. `customers` — Customer Master
+### 3. `customers` – Customer Master
 
 ```sql
 CREATE TABLE customers (
@@ -37,7 +40,7 @@ CREATE TABLE customers (
 );
 ```
 
-### 4. `inwards` — Purchase Records (Immutable)
+### 4. `inwards` – Immutable Purchase Records
 
 ```sql
 CREATE TABLE inwards (
@@ -46,6 +49,7 @@ CREATE TABLE inwards (
     suppcode VARCHAR(13) NOT NULL,
     requestedqty INT NOT NULL,
     receivedqty INT NOT NULL,
+    purchase_price_per_unit DECIMAL(10, 2) NOT NULL CHECK (purchase_price_per_unit >= 0), -- Cost price per unit for this batch
     datepurchase DATE NOT NULL,
     expiry DATE NOT NULL,
     FOREIGN KEY (itemcode) REFERENCES itemlist(itemcode),
@@ -53,7 +57,7 @@ CREATE TABLE inwards (
 );
 ```
 
-### 5. `inventory` — Live Stock by Batch
+### 5. `inventory` – Live Stock by Batch
 
 ```sql
 CREATE TABLE inventory (
@@ -69,7 +73,7 @@ CREATE TABLE inventory (
 );
 ```
 
-### 6. `outwards` — Sales/Dispatch Records (Immutable)
+### 6. `outwards` – Immutable Dispatch Records
 
 ```sql
 CREATE TABLE outwards (
@@ -77,25 +81,18 @@ CREATE TABLE outwards (
     batchcode VARCHAR(13) NOT NULL,
     custcode VARCHAR(13) NOT NULL,
     qty INTEGER NOT NULL CHECK (qty > 0),
+    selling_price_per_unit DECIMAL(10, 2) NOT NULL CHECK (selling_price_per_unit >= 0), -- Selling price per unit for this transaction
     dateout DATE NOT NULL,
     FOREIGN KEY (batchcode) REFERENCES inventory(batchcode),
     FOREIGN KEY (custcode) REFERENCES customers(custcode)
 );
 ```
 
----
+## Trigger System
 
-##  Trigger Logic
+Automated triggers enforce stock integrity, prevent overselling, and ensure data consistency. (Triggers remain unchanged as they primarily deal with quantity, not price).
 
-Triggers ensure inventory integrity by:
-
-* Preventing overselling.
-* Automatically reducing inventory after each sale.
-* Keeping `inwards` untouched for tax & audit compliance.
-
----
-
-###  Trigger 1: Prevent Overselling (Although there is a guardrail this is better)
+### Trigger 1: Prevent Overselling
 
 ```sql
 CREATE TRIGGER trg_check_inventory_before_outwards
@@ -106,17 +103,12 @@ BEGIN
         WHEN (
             SELECT qty FROM inventory WHERE batchcode = NEW.batchcode
         ) < NEW.qty
-        THEN RAISE(ABORT, ' Not enough stock available for this batch')
+        THEN RAISE(ABORT, 'Not enough stock available for this batch')
     END;
 END;
 ```
 
- Ensures that sales do not exceed available stock.
- Aborts insert if inventory is insufficient.
-
----
-
-###  Trigger 2: Reduce Inventory After Sale
+### Trigger 2: Reduce Stock After Sale
 
 ```sql
 CREATE TRIGGER trg_after_outwards_insert
@@ -126,27 +118,36 @@ BEGIN
     SET qty = qty - NEW.qty
     WHERE batchcode = NEW.batchcode;
 
-    -- Extra Guard Rail: Ensure inventory never goes negative (failsafe)
     SELECT
     CASE
         WHEN (
             SELECT qty FROM inventory WHERE batchcode = NEW.batchcode
         ) < 0
-        THEN RAISE(ABORT, ' Inventory fell below 0. This should never happen.')
+        THEN RAISE(ABORT, 'Inventory fell below 0. This should never happen.')
     END;
 END;
 ```
 
- Updates inventory automatically.
- Has a **failsafe check** in case logic ever bypasses trigger 1 (e.g., via direct manipulation).
+### Trigger 3: Auto-Insert Into Inventory After Inward
 
----
+```sql
+CREATE TRIGGER trg_auto_inventory_insert
+AFTER INSERT ON inwards
+BEGIN
+    INSERT INTO inventory (batchcode, itemcode, qty)
+    VALUES (NEW.batchcode, NEW.itemcode, NEW.receivedqty);
+END;
+```
 
-##  Summary
+## Summary
 
-*  `inwards` — Immutable purchase log.
-*  `outwards` — Immutable dispatch log.
-*  `inventory` — Live stock tracking.
-*  Triggers ensure logical integrity and business safety.
+| Table     | Purpose                                     | Mutable?   |
+| --------- | ------------------------------------------- | ---------- |
+| itemlist  | Master reference for items                  | Yes        |
+| suppliers | Supplier contact and ID                     | Yes        |
+| customers | Customer contact and ID                     | Yes        |
+| inwards   | Purchase logs (with expiry and cost price)  | No         |
+| inventory | Current stock by batch                      | Yes (live) |
+| outwards  | Sales/dispatch records (with selling price) | No         |
 
----
+Triggers keep everything in sync and safe from bad inserts. The addition of pricing fields in `inwards` and `outwards` tables now allows for profit calculations.

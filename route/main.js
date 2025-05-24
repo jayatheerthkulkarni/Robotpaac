@@ -18,7 +18,7 @@ import express from 'express';
 import dotenv from 'dotenv' 
 import path from 'path';
 import { fileURLToPath } from 'url';
-import databaseapi from './databaseroutes';
+import dashboard from './dashboard';
 import cors from 'cors';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -29,7 +29,7 @@ const main_project_dir = path.join(__dirname, "..");
 /* sets up every other path that is required throughout the project */
 /* Please set up all the paths here, we don't want path.join again and again */
 const path_to_rendered = path.join(main_project_dir, "/rendered_routing");
-const path_to_rendered_home = path.join(path_to_rendered, "/home/index.html");
+const path_to_rendered_home = path.join(path_to_rendered, "/dashboard/index.html");
 
 
 dotenv.config({path: '../env/.env'});/*Do create the file*/
@@ -39,7 +39,7 @@ const port = process.env.PORT_ROBOT; /*Do not hardcode the port here*/
 app.use(cors());
 app.use(express.static(path.join(path_to_rendered)));
 
-app.use("/api/data",databaseapi);
+app.use("/api/data",dashboard);
 app.get("/", (req, res) => {
     res.sendFile(path_to_rendered_home);
 });

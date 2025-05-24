@@ -64,11 +64,7 @@
 			</div>			
 		</div>
 	</div>
-	<div class="div3">
-		<div  class="option">
-			
-		</div>
-	</div>
+
 	<div class="div4">
 		<div id="op4" class="option">
 			<ViewVar/>
@@ -102,19 +98,10 @@
 		align-items: center;
 	}
 
-	.div3 {
-		display: flex;
-		grid-column: span 3 / span 3;
-		grid-row: span 3 / span 3;
-		grid-column-start: 3;
-		grid-row-start: 10;
-		justify-content: center;
-	}
-
 	.div4 {
 		display: flex;
 		grid-column: span 3 / span 3;
-		grid-row: span 9 / span 9;
+		grid-row: span 12 / span 12;
 		grid-column-start: 3;
 		grid-row-start: 1;
 		justify-content: center;

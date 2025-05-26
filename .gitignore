@@ -2,3 +2,4 @@
 /env
 /database_location
 *.o
+/node_modules

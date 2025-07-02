@@ -18,6 +18,7 @@ import dashboard from './dashboard';
 import master from './master';
 import cors from 'cors';
 import suppliers from './suppliers';
+import customers from './customer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -53,6 +54,7 @@ app.use(express.static(path.join(path_to_rendered)));
 app.use('/api/data', dashboard);
 app.use('/api/master', master);
 app.use('/api/suppliers', suppliers);
+app.use('/api/customers', customers);
 
 app.get('/', (req, res) => {
   res.sendFile(path_to_rendered_home);

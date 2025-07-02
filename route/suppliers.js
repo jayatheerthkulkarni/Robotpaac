@@ -64,4 +64,26 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+router.put('/:id', async (req, res) => {
+  const { id } = req.params;
+  const { suppname, suppcontact } = req.body;
+
+  if (!suppname || !suppcontact) {
+    return res.status(400).json({ error: 'Name and Contact are required' });
+  }
+
+  try {
+    await dbRun(
+      'UPDATE suppliers SET suppname = ?, suppcontact = ? WHERE suppcode = ?',
+      suppname,
+      suppcontact,
+      id,
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;

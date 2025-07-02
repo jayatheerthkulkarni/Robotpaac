@@ -1,0 +1,16 @@
+body {
+	margin: 0;
+	border: 0;
+	background-color: rgb(255, 255, 255);
+}
+
+html, body {
+	height: 100%;
+	margin: 0;
+	box-sizing: inherit;
+}
+
+::selection {
+	background-color: rgb(78, 27, 8);
+	color: rgb(248, 236, 197);
+}

@@ -19,6 +19,7 @@ import master from './master';
 import cors from 'cors';
 import suppliers from './suppliers';
 import customers from './customer';
+import inwards from './inwards';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,11 +43,22 @@ const path_to_rendered_suppliers = path.join(
   '/suppliers/index.html',
 );
 
+const path_to_rendered_customers = path.join(
+  path_to_rendered,
+  '/customers/index.html',
+);
+
+const path_to_rendered_inwards = path.join(
+  path_to_rendered,
+  '/inwards/index.html',
+);
+
 dotenv.config({ path: '../env/.env' }); /*Do create the file*/
 
 const app = express();
 const port = process.env.PORT_ROBOT; /*Do not hardcode the port here*/
 app.use(cors());
+app.use(express.json()); // This line is crucial for parsing JSON request bodies
 app.use(express.static(path.join(path_to_rendered)));
 
 /* please add all the apis prehand in this order */
@@ -55,6 +67,7 @@ app.use('/api/data', dashboard);
 app.use('/api/master', master);
 app.use('/api/suppliers', suppliers);
 app.use('/api/customers', customers);
+app.use('/api/inwards', inwards);
 
 app.get('/', (req, res) => {
   res.sendFile(path_to_rendered_home);
@@ -66,6 +79,14 @@ app.get('/product', (req, res) => {
 
 app.get('/suppliers', (req, res) => {
   res.sendFile(path_to_rendered_suppliers);
+});
+
+app.get('/customers', (req, res) => {
+  res.sendFile(path_to_rendered_customers);
+});
+
+app.get('/inwards', (req, res) => {
+  res.sendFile(path_to_rendered_inwards);
 });
 
 app.listen(port, () => {

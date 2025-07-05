@@ -1,0 +1,20 @@
+
+####
+Add total stock note for selected day.
+####
+Units of measurements for all the master and batches
+Add max 3 len string for that and 3 decimals 
+####
+Dropdown for all the existing items codes supp codes and cust codes
+Master items
+####
+Date to dd/mm/yyyy
+####
+BOM copy from other BOMs
+####
+Selling a BOM 
+BOM master
+####
+Delivary challan for 
+reference in Outward
+####

@@ -10,22 +10,100 @@
   let chartInstance = $state(null);
   let displayMetric = $state('total_profit_from_customer');
   let limit = $state(5);
+  let selectedYear = $state('all');
+  let availableYears = $state([]);
+
+  let allRawCustomerData = $state([]);
 
   async function fetchData() {
     isLoading = true;
     errorMessage = '';
     try {
       const response = await axios.get(
-        `http://localhost:3000/api/data/top/customers?limit=${limit}`,
+        `http://localhost:3000/api/data/top/customers`,
       );
-      topCustomers = response.data;
+      allRawCustomerData = response.data;
+      processCustomerData(allRawCustomerData);
     } catch (error) {
       console.error('Error fetching top customers:', error);
       errorMessage = 'Failed to load top customers.';
       topCustomers = [];
+      availableYears = [];
+      allRawCustomerData = [];
     } finally {
       isLoading = false;
     }
+  }
+
+  function processCustomerData(rawData) {
+    const yearsSet = new Set();
+    const yearlyAggregatedData = {};
+    const allYearsAggregatedData = {};
+
+    rawData.forEach((item) => {
+      const year = item.sale_year;
+      if (year) {
+        yearsSet.add(year);
+      }
+
+      if (!allYearsAggregatedData[item.custname]) {
+        allYearsAggregatedData[item.custname] = {
+          custcode: item.custcode,
+          custname: item.custname,
+          total_orders: 0,
+          total_quantity_purchased: 0,
+          total_revenue_from_customer: 0,
+          total_profit_from_customer: 0,
+        };
+      }
+      allYearsAggregatedData[item.custname].total_orders += item.total_orders;
+      allYearsAggregatedData[item.custname].total_quantity_purchased +=
+        item.total_quantity_purchased;
+      allYearsAggregatedData[item.custname].total_revenue_from_customer +=
+        item.total_revenue_from_customer;
+      allYearsAggregatedData[item.custname].total_profit_from_customer +=
+        item.total_profit_from_customer;
+
+      if (year) {
+        if (!yearlyAggregatedData[year]) {
+          yearlyAggregatedData[year] = {};
+        }
+        if (!yearlyAggregatedData[year][item.custname]) {
+          yearlyAggregatedData[year][item.custname] = {
+            custcode: item.custcode,
+            custname: item.custname,
+            total_orders: 0,
+            total_quantity_purchased: 0,
+            total_revenue_from_customer: 0,
+            total_profit_from_customer: 0,
+          };
+        }
+        yearlyAggregatedData[year][item.custname].total_orders +=
+          item.total_orders;
+        yearlyAggregatedData[year][item.custname].total_quantity_purchased +=
+          item.total_quantity_purchased;
+        yearlyAggregatedData[year][item.custname].total_revenue_from_customer +=
+          item.total_revenue_from_customer;
+        yearlyAggregatedData[year][item.custname].total_profit_from_customer +=
+          item.total_profit_from_customer;
+      }
+    });
+
+    availableYears = Array.from(yearsSet).sort((a, b) => b - a);
+
+    let currentCustomers = [];
+    if (selectedYear === 'all') {
+      currentCustomers = Object.values(allYearsAggregatedData);
+    } else {
+      const yearStr = String(selectedYear);
+      if (yearlyAggregatedData[yearStr]) {
+        currentCustomers = Object.values(yearlyAggregatedData[yearStr]);
+      }
+    }
+
+    topCustomers = currentCustomers
+      .sort((a, b) => b[displayMetric] - a[displayMetric])
+      .slice(0, limit);
   }
 
   function getMetricLabel() {
@@ -75,7 +153,7 @@
             legend: { display: false },
             title: {
               display: true,
-              text: `Top ${limit} Customers by ${getMetricLabel()}`,
+              text: `Top ${limit} Customers by ${getMetricLabel()} (${selectedYear === 'all' ? 'All Years' : selectedYear})`,
             },
           },
         },
@@ -99,12 +177,14 @@
   });
 
   $effect(() => {
-    fetchData();
-  });
-
-  $effect(() => {
-    if (!isLoading && chartCanvas) {
+    if (!isLoading && allRawCustomerData.length > 0) {
+      processCustomerData(allRawCustomerData);
       createOrUpdateChart();
+    } else if (!isLoading && allRawCustomerData.length === 0) {
+      if (chartInstance) {
+        chartInstance.destroy();
+        chartInstance = null;
+      }
     }
   });
 </script>
@@ -128,6 +208,13 @@
         <option value={5}>5</option>
         <option value={10}>10</option>
       </select>
+      <label for="year-select">Year:</label>
+      <select id="year-select" bind:value={selectedYear}>
+        <option value="all">All Years</option>
+        {#each availableYears as year}
+          <option value={year}>{year}</option>
+        {/each}
+      </select>
     </div>
   </div>
 
@@ -136,7 +223,11 @@
   {:else if errorMessage}
     <div class="error-state"><p>{errorMessage}</p></div>
   {:else if topCustomers.length === 0}
-    <p class="no-data-message">No customer data available.</p>
+    <p class="no-data-message">
+      No customer data available for {selectedYear === 'all'
+        ? 'all years'
+        : selectedYear}.
+    </p>
   {:else}
     <div class="chart-container-wrapper">
       <canvas bind:this={chartCanvas}></canvas>
@@ -150,6 +241,7 @@
             <th>Total Quantity Purchased</th>
             <th>Total Revenue</th>
             <th>Total Profit</th>
+            <th>Year</th>
           </tr>
         </thead>
         <tbody>
@@ -165,6 +257,7 @@
               >
                 {formatCurrency(customer.total_profit_from_customer)}
               </td>
+              <td>{selectedYear === 'all' ? 'All' : selectedYear}</td>
             </tr>
           {/each}
         </tbody>

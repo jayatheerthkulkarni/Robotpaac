@@ -15,6 +15,13 @@
   const showModal = writable(false);
   const modalContent = writable({ field: '', text: '' });
 
+  const showAddItemForm = writable(false);
+  const newItemCode = writable('');
+  const newItemName = writable('');
+  const newItemMinStock = writable('');
+  const newItemUnit = writable('');
+  const addItemMessage = writable('');
+
   const itemGroupColumns = [
     { key: 'itemcode', label: 'Item Code', sortable: true },
     { key: 'itemname', label: 'Item Name', sortable: true },
@@ -22,22 +29,55 @@
       key: 'total_stock_for_item',
       label: 'Total Stock',
       sortable: true,
-      type: 'number',
+      type: 'float',
+    },
+    {
+      key: 'unit_name',
+      label: 'Unit',
+      sortable: true,
     },
     {
       key: 'min_stock_level',
       label: 'Min. Item Stock',
       sortable: true,
-      type: 'number',
+      type: 'float',
+    },
+    {
+      key: 'average_purchase_price',
+      label: 'Avg. Purchase Price',
+      sortable: true,
+      type: 'currency',
+    },
+    {
+      key: 'average_estimated_profit_percentage',
+      label: 'Avg. Est. Profit (%)',
+      sortable: true,
+      type: 'percentage',
+    },
+    {
+      key: 'average_estimated_selling_price',
+      label: 'Avg. Est. Sell Price',
+      sortable: true,
+      type: 'currency',
     },
   ];
 
   const batchDetailColumns = [
     { key: 'batchcode', label: 'Batch Code' },
-    { key: 'current_stock_in_batch', label: 'Stock in Batch', type: 'number' },
+    { key: 'current_stock_in_batch', label: 'Stock in Batch', type: 'float' },
     {
       key: 'purchase_price_per_unit',
       label: 'Purchase Price',
+      type: 'currency',
+    },
+    {
+      key: 'estimate_percentage',
+      label: 'Est. Profit (%)',
+      type: 'percentage',
+    },
+    {
+      key: 'estimated_selling_price_per_unit',
+      label: 'Est. Sell Price',
       type: 'currency',
     },
     { key: 'datepurchase', label: 'Purchase Date', type: 'date' },
@@ -90,6 +130,17 @@
     });
   }
 
+  function formatPercentage(value) {
+    if (value == null || isNaN(Number(value))) return 'N/A';
+    return `${Number(value).toFixed(2)}%`;
+  }
+
+  function formatFloat(value) {
+    if (value == null || isNaN(Number(value))) return 'N/A';
+    // Always display with 3 decimal places as requested, even if it's an integer
+    return Number(value).toFixed(3);
+  }
+
   function toggleExpand(code) {
     expandedItemCodes.update((set) => {
       const s = new Set(set);
@@ -133,16 +184,55 @@
             itemcode: b.itemcode,
             itemname: b.itemname,
             min_stock_level: b.min_stock_level,
+            unit_name: b.unit_name,
             total_stock_for_item: 0,
+            total_value_of_stock: 0,
+            total_weighted_profit_percentage: 0,
+            total_weighted_estimated_selling_price: 0,
             batches: [],
           };
         }
         const stock = Number(b.current_stock_in_batch);
+        const purchasePrice = Number(b.purchase_price_per_unit);
+        const profitPercentage = Number(b.estimate_percentage);
+
+        let estimatedSellingPrice = 0;
+        if (!isNaN(purchasePrice) && !isNaN(profitPercentage)) {
+          estimatedSellingPrice = purchasePrice * (1 + profitPercentage / 100);
+        }
+        b.estimated_selling_price_per_unit = estimatedSellingPrice;
+
         acc[b.itemcode].total_stock_for_item += isNaN(stock) ? 0 : stock;
+        if (!isNaN(stock) && !isNaN(purchasePrice)) {
+          acc[b.itemcode].total_value_of_stock += stock * purchasePrice;
+        }
+        if (!isNaN(stock) && stock > 0 && !isNaN(profitPercentage)) {
+          acc[b.itemcode].total_weighted_profit_percentage +=
+            stock * profitPercentage;
+        }
+        if (!isNaN(stock) && stock > 0 && !isNaN(estimatedSellingPrice)) {
+          acc[b.itemcode].total_weighted_estimated_selling_price +=
+            stock * estimatedSellingPrice;
+        }
+
         acc[b.itemcode].batches.push(b);
         return acc;
       }, {});
+
       Object.values(grouped).forEach((g) => {
+        if (g.total_stock_for_item > 0) {
+          g.average_purchase_price =
+            g.total_value_of_stock / g.total_stock_for_item;
+          g.average_estimated_profit_percentage =
+            g.total_weighted_profit_percentage / g.total_stock_for_item;
+          g.average_estimated_selling_price =
+            g.total_weighted_estimated_selling_price / g.total_stock_for_item;
+        } else {
+          g.average_purchase_price = 0;
+          g.average_estimated_profit_percentage = 0;
+          g.average_estimated_selling_price = 0;
+        }
+
         g.batches.sort((a, b) => {
           const ta = new Date(a.expiry).getTime();
           const tb = new Date(b.expiry).getTime();
@@ -152,6 +242,7 @@
           return ta - tb;
         });
       });
+
       let arr = Object.values(grouped);
       if ($sortCol) {
         const def = itemGroupColumns.find((c) => c.key === $sortCol);
@@ -159,9 +250,41 @@
           arr.sort((a, b) => {
             let va = a[$sortCol],
               vb = b[$sortCol];
-            if (va == null) va = $sortDir === 'asc' ? Infinity : -Infinity;
-            if (vb == null) vb = $sortDir === 'asc' ? Infinity : -Infinity;
-            if (def.type === 'number') {
+
+            if (va == null) {
+              va =
+                $sortDir === 'asc'
+                  ? def.type === 'float' ||
+                    def.type === 'currency' ||
+                    def.type === 'percentage'
+                    ? Infinity
+                    : ''
+                  : def.type === 'float' ||
+                      def.type === 'currency' ||
+                      def.type === 'percentage'
+                    ? -Infinity
+                    : 'zzzzzzzzzzzz';
+            }
+            if (vb == null) {
+              vb =
+                $sortDir === 'asc'
+                  ? def.type === 'float' ||
+                    def.type === 'currency' ||
+                    def.type === 'percentage'
+                    ? Infinity
+                    : ''
+                  : def.type === 'float' ||
+                      def.type === 'currency' ||
+                      def.type === 'percentage'
+                    ? -Infinity
+                    : 'zzzzzzzzzzzz';
+            }
+
+            if (
+              def.type === 'float' ||
+              def.type === 'currency' ||
+              def.type === 'percentage'
+            ) {
               va = Number(va) || 0;
               vb = Number(vb) || 0;
               return $sortDir === 'asc' ? va - vb : vb - va;
@@ -175,6 +298,50 @@
       return arr;
     },
   );
+
+  async function handleAddItem(event) {
+    event.preventDefault();
+    addItemMessage.set('');
+
+    const itemData = {
+      itemcode: $newItemCode,
+      itemname: $newItemName,
+      // Ensure min_stock_level is sent as a float/number
+      min_stock_level: $newItemMinStock ? parseFloat($newItemMinStock) : 0.0,
+      unit_name: $newItemUnit,
+    };
+
+    if (!itemData.itemcode || !itemData.itemname) {
+      addItemMessage.set('Item Code and Item Name are required.');
+      return;
+    }
+
+    // Min stock level and unit are now required as per the form
+    if (isNaN(itemData.min_stock_level)) {
+      addItemMessage.set('Min. Stock Level must be a number.');
+      return;
+    }
+    if (!itemData.unit_name) {
+      addItemMessage.set('Unit is required.');
+      return;
+    }
+
+    try {
+      const res = await axios.post(
+        'http://localhost:3000/api/master/add-item',
+        itemData,
+      );
+      addItemMessage.set(res.data.message);
+      newItemCode.set('');
+      newItemName.set('');
+      newItemMinStock.set('');
+      newItemUnit.set('');
+      showAddItemForm.set(false);
+      fetchInventory();
+    } catch (error) {
+      addItemMessage.set(error.response?.data?.error || 'Failed to add item.');
+    }
+  }
 
   function openModalWithContent(field, text) {
     modalContent.set({ field, text: text != null ? String(text) : 'N/A' });
@@ -190,10 +357,17 @@
             'Item Code': g.itemcode,
             'Item Name': g.itemname,
             'Min. Stock Level (Item)': g.min_stock_level,
+            Unit: g.unit_name,
             'Total Stock (Item)': g.total_stock_for_item,
+            'Avg. Purchase Price (Item)': g.average_purchase_price,
+            'Avg. Est. Profit (%) (Item)':
+              g.average_estimated_profit_percentage,
+            'Avg. Est. Sell Price (Item)': g.average_estimated_selling_price,
             'Batch Code': b.batchcode,
             'Stock in Batch': b.current_stock_in_batch,
-            'Purchase Price': formatCurrency(b.purchase_price_per_unit),
+            'Purchase Price': b.purchase_price_per_unit,
+            'Est. Profit (%) (Batch)': b.estimate_percentage,
+            'Est. Sell Price (Batch)': b.estimated_selling_price_per_unit,
             'Purchase Date': formatDateForDisplay(b.datepurchase),
             'Expiry Date': formatDateForDisplay(b.expiry),
             Supplier: b.suppname,
@@ -208,7 +382,24 @@
             'Item Code': g.itemcode,
             'Item Name': g.itemname,
             'Min. Stock Level (Item)': g.min_stock_level,
+            Unit: g.unit_name,
             'Total Stock (Item)': g.total_stock_for_item,
+            'Avg. Purchase Price (Item)': g.average_purchase_price,
+            'Avg. Est. Profit (%) (Item)':
+              g.average_estimated_profit_percentage,
+            'Avg. Est. Sell Price (Item)': g.average_estimated_selling_price,
+            'Batch Code': 'N/A',
+            'Stock in Batch': 'N/A',
+            'Purchase Price': 'N/A',
+            'Est. Profit (%) (Batch)': 'N/A',
+            'Est. Sell Price (Batch)': 'N/A',
+            'Purchase Date': 'N/A',
+            'Expiry Date': 'N/A',
+            Supplier: 'N/A',
+            'Used For': 'N/A',
+            'Desc 1': 'N/A',
+            'Desc 2': 'N/A',
+            'Desc 3': 'N/A',
           });
         }
       });
@@ -216,7 +407,7 @@
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'InventoryData');
-    XLSX.writeFile(wb, 'FullInventoryDetails.xlsx');
+    XLSX.writeFile(wb, 'FullInventoryDetails.xlsx'); // Corrected typo here
   }
 
   onMount(fetchInventory);
@@ -237,8 +428,72 @@
         <button on:click={downloadAsExcel} class="btn excel-btn"
           >Export Excel</button
         >
+        <button
+          on:click={() => showAddItemForm.set(true)}
+          class="btn add-item-btn">Add New Item</button
+        >
       </div>
     </div>
+
+    {#if $showAddItemForm}
+      <div class="add-item-form-container">
+        <h3>Add New Item</h3>
+        <form on:submit={handleAddItem}>
+          <div class="form-group">
+            <label for="newItemCode">Item Code:</label>
+            <input
+              id="newItemCode"
+              type="text"
+              bind:value={$newItemCode}
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="newItemName">Item Name:</label>
+            <input
+              id="newItemName"
+              type="text"
+              bind:value={$newItemName}
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="newItemMinStock">Min. Stock Level:</label>
+            <input
+              id="newItemMinStock"
+              type="number"
+              step="0.001"
+              bind:value={$newItemMinStock}
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="newItemUnit">Unit:</label>
+            <input
+              id="newItemUnit"
+              type="text"
+              bind:value={$newItemUnit}
+              required
+            />
+          </div>
+          <button type="submit" class="btn submit-btn">Add Item</button>
+          <button
+            type="button"
+            class="btn cancel-btn"
+            on:click={() => showAddItemForm.set(false)}>Cancel</button
+          >
+        </form>
+        {#if $addItemMessage}
+          <p
+            class="status {$addItemMessage.includes('successfully')
+              ? 'success'
+              : 'error'}"
+          >
+            {$addItemMessage}
+          </p>
+        {/if}
+      </div>
+    {/if}
 
     {#if $isLoading && $rawInventoryItems.length === 0}
       <p class="status">Loading inventory data...</p>
@@ -280,11 +535,24 @@
                     <span
                       class="cell-content"
                       on:click={() =>
-                        openModalWithContent(col.label, g[col.key])}
+                        openModalWithContent(
+                          col.label,
+                          col.type === 'currency'
+                            ? formatCurrency(g[col.key])
+                            : col.type === 'percentage'
+                              ? formatPercentage(g[col.key])
+                              : col.type === 'float'
+                                ? formatFloat(g[col.key])
+                                : g[col.key],
+                        )}
                     >
-                      {col.type === 'number'
-                        ? g[col.key]?.toLocaleString()
-                        : (g[col.key] ?? 'N/A')}
+                      {col.type === 'float'
+                        ? formatFloat(g[col.key])
+                        : col.type === 'currency'
+                          ? formatCurrency(g[col.key])
+                          : col.type === 'percentage'
+                            ? formatPercentage(g[col.key])
+                            : (g[col.key] ?? 'N/A')}
                     </span>
                   </td>
                 {/each}
@@ -296,31 +564,41 @@
                       <table class="batch-table">
                         <thead>
                           <tr>
-                            {#each batchDetailColumns as b}
-                              <th>{b.label}</th>
+                            {#each batchDetailColumns as b_col}
+                              <th>{b_col.label}</th>
                             {/each}
                           </tr>
                         </thead>
                         <tbody>
                           {#each g.batches as b (b.batchcode)}
                             <tr>
-                              {#each batchDetailColumns as col}
+                              {#each batchDetailColumns as b_col}
                                 <td>
                                   <span
                                     class="cell-content"
                                     on:click={() =>
                                       openModalWithContent(
-                                        col.label,
-                                        b[col.key],
+                                        b_col.label,
+                                        b_col.type === 'date'
+                                          ? formatDateForDisplay(b[b_col.key])
+                                          : b_col.type === 'currency'
+                                            ? formatCurrency(b[b_col.key])
+                                            : b_col.type === 'percentage'
+                                              ? formatPercentage(b[b_col.key])
+                                              : b_col.type === 'float'
+                                                ? formatFloat(b[b_col.key])
+                                                : b[b_col.key],
                                       )}
                                   >
-                                    {col.type === 'date'
-                                      ? formatDateForDisplay(b[col.key])
-                                      : col.type === 'currency'
-                                        ? formatCurrency(b[col.key])
-                                        : col.type === 'number'
-                                          ? b[col.key]?.toLocaleString()
-                                          : (b[col.key] ?? 'N/A')}
+                                    {b_col.type === 'date'
+                                      ? formatDateForDisplay(b[b_col.key])
+                                      : b_col.type === 'currency'
+                                        ? formatCurrency(b[b_col.key])
+                                        : b_col.type === 'float'
+                                          ? formatFloat(b[b_col.key])
+                                          : b_col.type === 'percentage'
+                                            ? formatPercentage(b[b_col.key])
+                                            : (b[b_col.key] ?? 'N/A')}
                                   </span>
                                 </td>
                               {/each}
@@ -395,6 +673,13 @@
   }
   .excel-btn:hover {
     background: #0069d9;
+  }
+  .add-item-btn {
+    background: #28a745;
+    color: #fff;
+  }
+  .add-item-btn:hover {
+    background: #218838;
   }
   .table-container {
     max-height: 400px;
@@ -491,5 +776,50 @@
   }
   .status.error {
     color: #d9534f;
+  }
+  .status.success {
+    color: #28a745;
+  }
+
+  .add-item-form-container {
+    background: #f9f9f9;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .add-item-form-container h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+  }
+  .form-group {
+    margin-bottom: 1rem;
+  }
+  .form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+  }
+  .form-group input {
+    width: calc(100% - 20px);
+    padding: 0.5rem 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1rem;
+  }
+  .submit-btn {
+    background: #007bff;
+    color: white;
+    margin-right: 0.5rem;
+  }
+  .cancel-btn {
+    background: #6c757d;
+    color: white;
+  }
+  .submit-btn:hover {
+    background: #0056b3;
+  }
+  .cancel-btn:hover {
+    background: #5a6268;
   }
 </style>

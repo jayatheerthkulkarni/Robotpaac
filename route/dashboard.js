@@ -300,21 +300,21 @@ router.get('/profits/byitem', (req, res) => {
 });
 
 router.get('/top/suppliers', (req, res) => {
-  const limit = parseInt(req.query.limit, 10) || 5; // Default to top 5
+  const limit = parseInt(req.query.limit, 10) || 5;
   const query = `
 		SELECT
 		s.suppcode,
 		s.suppname,
 		COUNT(DISTINCT i.batchcode) AS total_batches_supplied,
 		SUM(i.receivedqty) AS total_quantity_supplied,
-		SUM(i.receivedqty * i.purchase_price_per_unit) AS total_purchase_value
+		SUM(i.receivedqty * i.purchase_price_per_unit) AS total_purchase_value,
+        STRFTIME('%Y', i.datepurchase) AS purchase_year
 		FROM inwards i
 		JOIN suppliers s ON i.suppcode = s.suppcode
-		GROUP BY s.suppcode, s.suppname
-		ORDER BY total_purchase_value DESC 
-		LIMIT ?;
+		GROUP BY s.suppcode, s.suppname, purchase_year
+		ORDER BY purchase_year DESC, total_purchase_value DESC;
 	`;
-  db.all(query, [limit], (err, rows) => {
+  db.all(query, [], (err, rows) => {
     if (err) {
       console.error('Error fetching top suppliers:', err);
       res.status(500).json({ error: 'Could not fetch top suppliers' });
@@ -325,7 +325,7 @@ router.get('/top/suppliers', (req, res) => {
 });
 
 router.get('/top/customers', (req, res) => {
-  const limit = parseInt(req.query.limit, 10) || 5; // Default to top 5
+  const limit = parseInt(req.query.limit, 10) || 5;
   const query = `
 		SELECT
 		c.custcode,
@@ -333,15 +333,15 @@ router.get('/top/customers', (req, res) => {
 		COUNT(o.outid) AS total_orders,
 		SUM(o.qty) AS total_quantity_purchased,
 		SUM(o.qty * o.selling_price_per_unit) AS total_revenue_from_customer,
-		SUM((o.selling_price_per_unit - i.purchase_price_per_unit) * o.qty) AS total_profit_from_customer
+		SUM((o.selling_price_per_unit - i.purchase_price_per_unit) * o.qty) AS total_profit_from_customer,
+        STRFTIME('%Y', o.dateout) AS sale_year -- Added sale_year
 		FROM outwards o
 		JOIN customers c ON o.custcode = c.custcode
 		JOIN inwards i ON o.batchcode = i.batchcode 
-		GROUP BY c.custcode, c.custname
-		ORDER BY total_profit_from_customer DESC
-		LIMIT ?;
+		GROUP BY c.custcode, c.custname, sale_year -- Group by sale_year
+		ORDER BY sale_year DESC, total_profit_from_customer DESC; -- Order by sale_year
 	`;
-  db.all(query, [limit], (err, rows) => {
+  db.all(query, [], (err, rows) => {
     if (err) {
       console.error('Error fetching top customers:', err);
       res.status(500).json({ error: 'Could not fetch top customers' });

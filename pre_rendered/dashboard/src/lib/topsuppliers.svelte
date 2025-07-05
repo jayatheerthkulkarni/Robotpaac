@@ -10,22 +10,91 @@
   let chartInstance = $state(null);
   let displayMetric = $state('total_purchase_value');
   let limit = $state(5);
+  let selectedYear = $state('all');
+  let availableYears = $state([]);
+
+  let allRawSupplierData = $state([]);
 
   async function fetchData() {
     isLoading = true;
     errorMessage = '';
     try {
       const response = await axios.get(
-        `http://localhost:3000/api/data/top/suppliers?limit=${limit}`,
+        `http://localhost:3000/api/data/top/suppliers`,
       );
-      topSuppliers = response.data;
+      allRawSupplierData = response.data;
+      processSupplierData(allRawSupplierData);
     } catch (error) {
       console.error('Error fetching top suppliers:', error);
       errorMessage = 'Failed to load top suppliers.';
       topSuppliers = [];
+      availableYears = [];
+      allRawSupplierData = [];
     } finally {
       isLoading = false;
     }
+  }
+
+  function processSupplierData(rawData) {
+    const yearsSet = new Set();
+    const yearlyAggregatedData = {};
+    const allYearsAggregatedData = {};
+
+    rawData.forEach((item) => {
+      const year = item.purchase_year;
+      yearsSet.add(year);
+
+      if (!allYearsAggregatedData[item.suppname]) {
+        allYearsAggregatedData[item.suppname] = {
+          suppcode: item.suppcode,
+          suppname: item.suppname,
+          total_purchase_value: 0,
+          total_quantity_supplied: 0,
+          total_batches_supplied: 0,
+        };
+      }
+      allYearsAggregatedData[item.suppname].total_purchase_value +=
+        item.total_purchase_value;
+      allYearsAggregatedData[item.suppname].total_quantity_supplied +=
+        item.total_quantity_supplied;
+      allYearsAggregatedData[item.suppname].total_batches_supplied +=
+        item.total_batches_supplied;
+
+      if (!yearlyAggregatedData[year]) {
+        yearlyAggregatedData[year] = {};
+      }
+      if (!yearlyAggregatedData[year][item.suppname]) {
+        yearlyAggregatedData[year][item.suppname] = {
+          suppcode: item.suppcode,
+          suppname: item.suppname,
+          total_purchase_value: 0,
+          total_quantity_supplied: 0,
+          total_batches_supplied: 0,
+        };
+      }
+      yearlyAggregatedData[year][item.suppname].total_purchase_value +=
+        item.total_purchase_value;
+      yearlyAggregatedData[year][item.suppname].total_quantity_supplied +=
+        item.total_quantity_supplied;
+      yearlyAggregatedData[year][item.suppname].total_batches_supplied +=
+        item.total_batches_supplied;
+    });
+
+    availableYears = Array.from(yearsSet).sort((a, b) => b - a);
+
+    let currentSuppliers = [];
+    if (selectedYear === 'all') {
+      currentSuppliers = Object.values(allYearsAggregatedData);
+    } else {
+      const yearStr = String(selectedYear);
+      if (yearlyAggregatedData[yearStr]) {
+        currentSuppliers = Object.values(yearlyAggregatedData[yearStr]);
+      }
+    }
+
+    topSuppliers = currentSuppliers
+      .sort((a, b) => b[displayMetric] - a[displayMetric])
+      .slice(0, limit);
   }
 
   function getMetricLabel() {
@@ -75,7 +144,7 @@
             legend: { display: false },
             title: {
               display: true,
-              text: `Top ${limit} Suppliers by ${getMetricLabel()}`,
+              text: `Top ${limit} Suppliers by ${getMetricLabel()} (${selectedYear === 'all' ? 'All Years' : selectedYear})`,
             },
           },
         },
@@ -99,12 +168,14 @@
   });
 
   $effect(() => {
-    fetchData();
-  });
-
-  $effect(() => {
-    if (!isLoading && chartCanvas) {
+    if (!isLoading && allRawSupplierData.length > 0) {
+      processSupplierData(allRawSupplierData);
       createOrUpdateChart();
+    } else if (!isLoading && allRawSupplierData.length === 0) {
+      if (chartInstance) {
+        chartInstance.destroy();
+        chartInstance = null;
+      }
     }
   });
 </script>
@@ -125,6 +196,13 @@
         <option value={5}>5</option>
         <option value={10}>10</option>
       </select>
+      <label for="year-select">Year:</label>
+      <select id="year-select" bind:value={selectedYear}>
+        <option value="all">All Years</option>
+        {#each availableYears as year}
+          <option value={year}>{year}</option>
+        {/each}
+      </select>
     </div>
   </div>
 
@@ -133,7 +211,11 @@
   {:else if errorMessage}
     <div class="error-state"><p>{errorMessage}</p></div>
   {:else if topSuppliers.length === 0}
-    <p class="no-data-message">No supplier data available.</p>
+    <p class="no-data-message">
+      No supplier data available for {selectedYear === 'all'
+        ? 'all years'
+        : selectedYear}.
+    </p>
   {:else}
     <div class="chart-container-wrapper">
       <canvas bind:this={chartCanvas}></canvas>
@@ -146,6 +228,7 @@
             <th>Total Batches</th>
             <th>Total Quantity Supplied</th>
             <th>Total Purchase Value</th>
+            <th>Year</th>
           </tr>
         </thead>
         <tbody>
@@ -155,6 +238,7 @@
               <td>{supplier.total_batches_supplied}</td>
               <td>{supplier.total_quantity_supplied.toLocaleString()}</td>
               <td>{formatCurrency(supplier.total_purchase_value)}</td>
+              <td>{selectedYear === 'all' ? 'All' : selectedYear}</td>
             </tr>
           {/each}
         </tbody>

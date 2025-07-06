@@ -1,9 +1,6 @@
 
 Add total stock note for selected day.
 ####
-Units of measurements for all the master and batches
-Add max 3 len string for that and 3 decimals 
-####
 Dropdown for all the existing items codes supp codes and cust codes
 Master items
 ####

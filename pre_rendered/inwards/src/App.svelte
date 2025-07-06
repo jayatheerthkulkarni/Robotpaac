@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { writable, derived } from 'svelte/store';
+  import { writable, derived, get } from 'svelte/store';
   import axios from 'axios';
   import * as XLSX from 'xlsx';
   import Navbar from './lib/navbar.svelte';
@@ -91,78 +91,53 @@
     }
   }
 
+  function flatpickrAction(node, defaultDate) {
+    const fp = flatpickr(node, {
+      dateFormat: 'Y-m-d',
+      altInput: true,
+      altFormat: 'd/m/Y',
+      defaultDate: defaultDate,
+      onClose: function (selectedDates) {
+        if (selectedDates.length > 0) {
+          node.value = selectedDates[0].toISOString().split('T')[0];
+          node.dispatchEvent(new Event('input', { bubbles: true }));
+        } else {
+          node.value = '';
+          node.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      },
+    });
+
+    return {
+      update(newDefaultDate) {
+        fp.setDate(newDefaultDate, false);
+      },
+      destroy() {
+        fp.destroy();
+      },
+    };
+  }
+
   onMount(async () => {
     await fetchInwards();
     await fetchItemOptions();
     await fetchSupplierOptions();
 
-    const addFlatpickr = flatpickr('#addDatePurchase', {
-      dateFormat: 'd/m/Y',
-      altInput: true,
-      altFormat: 'd/m/Y',
-      onClose: function (selectedDates, dateStr, instance) {
-        if (selectedDates.length > 0) {
-          const date = selectedDates[0];
-          addDatePurchase = date.toISOString().split('T')[0];
-        } else {
-          addDatePurchase = '';
-        }
-      },
-    });
-
-    let editFlatpickrInstance;
-    function initEditFlatpickr(element) {
-      if (element && !editFlatpickrInstance) {
-        editFlatpickrInstance = flatpickr(element, {
-          dateFormat: 'd/m/Y',
-          altInput: true,
-          altFormat: 'd/m/Y',
-          onReady: function (selectedDates, dateStr, instance) {
-            if (editedDatePurchase) {
-              instance.setDate(editedDatePurchase, true);
-            }
-          },
-          onClose: function (selectedDates, dateStr, instance) {
-            if (selectedDates.length > 0) {
-              const date = selectedDates[0];
-              editedDatePurchase = date.toISOString().split('T')[0];
-            } else {
-              editedDatePurchase = '';
-            }
-          },
-        });
-      } else if (element && editFlatpickrInstance) {
-        editFlatpickrInstance.destroy();
-        editFlatpickrInstance = flatpickr(element, {
-          dateFormat: 'd/m/Y',
-          altInput: true,
-          altFormat: 'd/m/Y',
-          onReady: function (selectedDates, dateStr, instance) {
-            if (editedDatePurchase) {
-              instance.setDate(editedDatePurchase, true);
-            }
-          },
-          onClose: function (selectedDates, dateStr, instance) {
-            if (selectedDates.length > 0) {
-              const date = selectedDates[0];
-              editedDatePurchase = date.toISOString().split('T')[0];
-            } else {
-              editedDatePurchase = '';
-            }
-          },
-        });
-      }
-      // Ensure the date is set when the element becomes visible in the DOM during edit mode
-      if (editedDatePurchase && editFlatpickrInstance) {
-        editFlatpickrInstance.setDate(editedDatePurchase, true);
-      }
+    const addDateInput = document.getElementById('addDatePurchase');
+    if (addDateInput) {
+      flatpickr(addDateInput, {
+        dateFormat: 'Y-m-d',
+        altInput: true,
+        altFormat: 'd/m/Y',
+        onClose: function (selectedDates) {
+          if (selectedDates.length > 0) {
+            addDatePurchase = selectedDates[0].toISOString().split('T')[0];
+          } else {
+            addDatePurchase = '';
+          }
+        },
+      });
     }
-
-    editingBatchCode.subscribe((batchCode) => {
-      if (batchCode === null && editFlatpickrInstance) {
-        editFlatpickrInstance.clear();
-      }
-    });
   });
 
   function calculateExpiryDays(purchaseDateStr, expiryDateStr) {
@@ -179,8 +154,8 @@
   function formatDateForTableDisplay(dateString) {
     if (!dateString) return 'N/A';
     const d = new Date(dateString);
-    if (isNaN(d.getTime())) return dateString;
-    return d.toLocaleDateString(undefined, {
+    if (isNaN(d.getTime())) return 'N/A';
+    return d.toLocaleDateString('en-GB', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -189,7 +164,7 @@
 
   function formatCurrency(value) {
     if (value == null || isNaN(Number(value))) return 'N/A';
-    return Number(value).toLocaleString(undefined, {
+    return Number(value).toLocaleString('en-IN', {
       style: 'currency',
       currency: 'INR',
     });
@@ -296,7 +271,9 @@
     editedReceivedQty = record.receivedqty;
     editedPurchasePrice = record.purchase_price_per_unit;
     editedEstimatePercentage = record.estimate_percentage;
-    editedDatePurchase = record.datepurchase;
+    editedDatePurchase = record.datepurchase
+      ? new Date(record.datepurchase).toISOString().split('T')[0]
+      : '';
     editedExpiryDays = record.expiryDays;
     editedItemUsed = record.itemused || '';
     editedDesc1 = record.itemdesc1 || '';
@@ -307,18 +284,6 @@
   function cancelEdit() {
     errorMessage.set('');
     editingBatchCode.set(null);
-    editedItemCode = '';
-    editedSuppCode = '';
-    editedRequestedQty = 0.0;
-    editedReceivedQty = 0.0;
-    editedPurchasePrice = 0.0;
-    editedEstimatePercentage = 0.0;
-    editedDatePurchase = '';
-    editedExpiryDays = 0.0;
-    editedItemUsed = '';
-    editedDesc1 = '';
-    editedDesc2 = '';
-    editedDesc3 = '';
   }
 
   async function saveEdit(batchcode) {
@@ -380,9 +345,9 @@
   }
 
   function exportExcel() {
-    const recordsToExport = rawInwards;
+    const recordsToExport = get(filteredInwards);
     if (!recordsToExport || recordsToExport.length === 0) {
-      alert('No inwards data to export.');
+      alert('No data to export.');
       return;
     }
 
@@ -392,8 +357,8 @@
       'Supplier Code': r.suppcode,
       'Requested Qty': formatFloat(r.requestedqty),
       'Received Qty': formatFloat(r.receivedqty),
-      'Purchase Price Per Unit': formatFloat(r.purchase_price_per_unit),
-      'Estimated Profit (%)': formatFloat(r.estimate_percentage),
+      'Purchase Price Per Unit': formatCurrency(r.purchase_price_per_unit),
+      'Estimated Profit (%)': formatPercentage(r.estimate_percentage),
       'Purchase Date': formatDateForTableDisplay(r.datepurchase),
       'Expiry Date': formatDateForTableDisplay(r.expiry),
       'Expiry Days': formatFloat(r.expiryDays),
@@ -671,10 +636,9 @@
                 <td>
                   {#if $editingBatchCode === r.batchcode}
                     <input
-                      id="editedDatePurchase"
                       type="text"
                       bind:value={editedDatePurchase}
-                      use:initEditFlatpickr
+                      use:flatpickrAction={editedDatePurchase}
                       required
                     />
                   {:else}

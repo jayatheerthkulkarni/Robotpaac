@@ -1,5 +1,4 @@
 
-####
 Add total stock note for selected day.
 ####
 Units of measurements for all the master and batches

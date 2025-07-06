@@ -4,20 +4,28 @@
   import axios from 'axios';
   import * as XLSX from 'xlsx';
   import Navbar from './lib/navbar.svelte';
+  import flatpickr from 'flatpickr';
+  import 'flatpickr/dist/flatpickr.min.css';
 
   const rawInwards = writable([]);
   const isLoading = writable(true);
   const errorMessage = writable('');
   const searchTerm = writable('');
 
+  const itemOptions = writable([]);
+  const supplierOptions = writable([]);
+
+  const showAddForm = writable(false);
+
   let addBatchCode = '';
   let addItemCode = '';
   let addSuppCode = '';
-  let addRequestedQty = 0;
-  let addReceivedQty = 0;
-  let addPurchasePrice = 0;
+  let addRequestedQty = 0.0;
+  let addReceivedQty = 0.0;
+  let addPurchasePrice = 0.0;
+  let addEstimatePercentage = 0.0;
   let addDatePurchase = '';
-  let addExpiryDays = 0;
+  let addExpiryDays = 0.0;
   let addItemUsed = '';
   let addDesc1 = '';
   let addDesc2 = '';
@@ -26,11 +34,12 @@
   const editingBatchCode = writable(null);
   let editedItemCode = '';
   let editedSuppCode = '';
-  let editedRequestedQty = 0;
-  let editedReceivedQty = 0;
-  let editedPurchasePrice = 0;
+  let editedRequestedQty = 0.0;
+  let editedReceivedQty = 0.0;
+  let editedPurchasePrice = 0.0;
+  let editedEstimatePercentage = 0.0;
   let editedDatePurchase = '';
-  let editedExpiryDays = 0;
+  let editedExpiryDays = 0.0;
   let editedItemUsed = '';
   let editedDesc1 = '';
   let editedDesc2 = '';
@@ -62,7 +71,99 @@
     }
   }
 
-  onMount(fetchInwards);
+  async function fetchItemOptions() {
+    try {
+      const res = await axios.get(`${INWARDS_API_URL}/item-list`);
+      itemOptions.set(res.data);
+    } catch (err) {
+      errorMessage.set('Failed to fetch item list.');
+      itemOptions.set([]);
+    }
+  }
+
+  async function fetchSupplierOptions() {
+    try {
+      const res = await axios.get(`${INWARDS_API_URL}/supplier-list`);
+      supplierOptions.set(res.data);
+    } catch (err) {
+      errorMessage.set('Failed to fetch supplier list.');
+      supplierOptions.set([]);
+    }
+  }
+
+  onMount(async () => {
+    await fetchInwards();
+    await fetchItemOptions();
+    await fetchSupplierOptions();
+
+    const addFlatpickr = flatpickr('#addDatePurchase', {
+      dateFormat: 'd/m/Y',
+      altInput: true,
+      altFormat: 'd/m/Y',
+      onClose: function (selectedDates, dateStr, instance) {
+        if (selectedDates.length > 0) {
+          const date = selectedDates[0];
+          addDatePurchase = date.toISOString().split('T')[0];
+        } else {
+          addDatePurchase = '';
+        }
+      },
+    });
+
+    let editFlatpickrInstance;
+    function initEditFlatpickr(element) {
+      if (element && !editFlatpickrInstance) {
+        editFlatpickrInstance = flatpickr(element, {
+          dateFormat: 'd/m/Y',
+          altInput: true,
+          altFormat: 'd/m/Y',
+          onReady: function (selectedDates, dateStr, instance) {
+            if (editedDatePurchase) {
+              instance.setDate(editedDatePurchase, true);
+            }
+          },
+          onClose: function (selectedDates, dateStr, instance) {
+            if (selectedDates.length > 0) {
+              const date = selectedDates[0];
+              editedDatePurchase = date.toISOString().split('T')[0];
+            } else {
+              editedDatePurchase = '';
+            }
+          },
+        });
+      } else if (element && editFlatpickrInstance) {
+        editFlatpickrInstance.destroy();
+        editFlatpickrInstance = flatpickr(element, {
+          dateFormat: 'd/m/Y',
+          altInput: true,
+          altFormat: 'd/m/Y',
+          onReady: function (selectedDates, dateStr, instance) {
+            if (editedDatePurchase) {
+              instance.setDate(editedDatePurchase, true);
+            }
+          },
+          onClose: function (selectedDates, dateStr, instance) {
+            if (selectedDates.length > 0) {
+              const date = selectedDates[0];
+              editedDatePurchase = date.toISOString().split('T')[0];
+            } else {
+              editedDatePurchase = '';
+            }
+          },
+        });
+      }
+      // Ensure the date is set when the element becomes visible in the DOM during edit mode
+      if (editedDatePurchase && editFlatpickrInstance) {
+        editFlatpickrInstance.setDate(editedDatePurchase, true);
+      }
+    }
+
+    editingBatchCode.subscribe((batchCode) => {
+      if (batchCode === null && editFlatpickrInstance) {
+        editFlatpickrInstance.clear();
+      }
+    });
+  });
 
   function calculateExpiryDays(purchaseDateStr, expiryDateStr) {
     if (!purchaseDateStr || !expiryDateStr) return null;
@@ -75,7 +176,7 @@
     return diffDays;
   }
 
-  function formatDateForDisplay(dateString) {
+  function formatDateForTableDisplay(dateString) {
     if (!dateString) return 'N/A';
     const d = new Date(dateString);
     if (isNaN(d.getTime())) return dateString;
@@ -92,6 +193,16 @@
       style: 'currency',
       currency: 'INR',
     });
+  }
+
+  function formatFloat(value) {
+    if (value == null || isNaN(Number(value))) return 'N/A';
+    return Number(value).toFixed(3);
+  }
+
+  function formatPercentage(value) {
+    if (value == null || isNaN(Number(value))) return 'N/A';
+    return `${Number(value).toFixed(2)}%`;
   }
 
   const filteredInwards = derived([rawInwards, searchTerm], ([$raw, $term]) => {
@@ -114,6 +225,7 @@
       requestedqty: Number(addRequestedQty),
       receivedqty: Number(addReceivedQty),
       purchase_price_per_unit: Number(addPurchasePrice),
+      estimate_percentage: Number(addEstimatePercentage),
       datepurchase: addDatePurchase.trim(),
       expiryDays: Number(addExpiryDays),
       itemused: addItemUsed.trim() || null,
@@ -127,17 +239,19 @@
       !newRecord.itemcode ||
       !newRecord.suppcode ||
       isNaN(newRecord.requestedqty) ||
-      newRecord.requestedqty <= 0 ||
+      newRecord.requestedqty < 0 ||
       isNaN(newRecord.receivedqty) ||
-      newRecord.receivedqty <= 0 ||
+      newRecord.receivedqty < 0 ||
       isNaN(newRecord.purchase_price_per_unit) ||
       newRecord.purchase_price_per_unit < 0 ||
+      isNaN(newRecord.estimate_percentage) ||
+      newRecord.estimate_percentage < 0 ||
       !newRecord.datepurchase ||
       isNaN(newRecord.expiryDays) ||
       newRecord.expiryDays < 0
     ) {
       errorMessage.set(
-        'Please fill all required fields correctly (quantities positive, expiry days non-negative, price non-negative).',
+        'Please fill all required fields correctly (quantities, expiry days, price, percentage non-negative, and dates valid).',
       );
       return;
     }
@@ -151,16 +265,18 @@
       addBatchCode = '';
       addItemCode = '';
       addSuppCode = '';
-      addRequestedQty = 0;
-      addReceivedQty = 0;
-      addPurchasePrice = 0;
+      addRequestedQty = 0.0;
+      addReceivedQty = 0.0;
+      addPurchasePrice = 0.0;
+      addEstimatePercentage = 0.0;
       addDatePurchase = '';
-      addExpiryDays = 0;
+      addExpiryDays = 0.0;
       addItemUsed = '';
       addDesc1 = '';
       addDesc2 = '';
       addDesc3 = '';
       await fetchInwards();
+      showAddForm.set(false);
     } catch (err) {
       const msg =
         err.response?.data?.error ||
@@ -179,6 +295,7 @@
     editedRequestedQty = record.requestedqty;
     editedReceivedQty = record.receivedqty;
     editedPurchasePrice = record.purchase_price_per_unit;
+    editedEstimatePercentage = record.estimate_percentage;
     editedDatePurchase = record.datepurchase;
     editedExpiryDays = record.expiryDays;
     editedItemUsed = record.itemused || '';
@@ -192,11 +309,12 @@
     editingBatchCode.set(null);
     editedItemCode = '';
     editedSuppCode = '';
-    editedRequestedQty = 0;
-    editedReceivedQty = 0;
-    editedPurchasePrice = 0;
+    editedRequestedQty = 0.0;
+    editedReceivedQty = 0.0;
+    editedPurchasePrice = 0.0;
+    editedEstimatePercentage = 0.0;
     editedDatePurchase = '';
-    editedExpiryDays = 0;
+    editedExpiryDays = 0.0;
     editedItemUsed = '';
     editedDesc1 = '';
     editedDesc2 = '';
@@ -212,6 +330,7 @@
       requestedqty: Number(editedRequestedQty),
       receivedqty: Number(editedReceivedQty),
       purchase_price_per_unit: Number(editedPurchasePrice),
+      estimate_percentage: Number(editedEstimatePercentage),
       datepurchase: editedDatePurchase.trim(),
       expiryDays: Number(editedExpiryDays),
       itemused: editedItemUsed.trim() || null,
@@ -224,17 +343,19 @@
       !updatedFields.itemcode ||
       !updatedFields.suppcode ||
       isNaN(updatedFields.requestedqty) ||
-      updatedFields.requestedqty <= 0 ||
+      updatedFields.requestedqty < 0 ||
       isNaN(updatedFields.receivedqty) ||
-      updatedFields.receivedqty <= 0 ||
+      updatedFields.receivedqty < 0 ||
       isNaN(updatedFields.purchase_price_per_unit) ||
       updatedFields.purchase_price_per_unit < 0 ||
+      isNaN(updatedFields.estimate_percentage) ||
+      updatedFields.estimate_percentage < 0 ||
       !updatedFields.datepurchase ||
       isNaN(updatedFields.expiryDays) ||
       updatedFields.expiryDays < 0
     ) {
       errorMessage.set(
-        'Edited fields must be valid (quantities positive, expiry days non-negative, price non-negative).',
+        'Edited fields must be valid (quantities, expiry days, price, percentage non-negative, and dates valid).',
       );
       return;
     }
@@ -269,12 +390,13 @@
       'Batch Code': r.batchcode,
       'Item Code': r.itemcode,
       'Supplier Code': r.suppcode,
-      'Requested Qty': r.requestedqty,
-      'Received Qty': r.receivedqty,
-      'Purchase Price Per Unit': r.purchase_price_per_unit,
-      'Purchase Date': formatDateForDisplay(r.datepurchase),
-      'Expiry Date': formatDateForDisplay(r.expiry),
-      'Expiry Days': r.expiryDays,
+      'Requested Qty': formatFloat(r.requestedqty),
+      'Received Qty': formatFloat(r.receivedqty),
+      'Purchase Price Per Unit': formatFloat(r.purchase_price_per_unit),
+      'Estimated Profit (%)': formatFloat(r.estimate_percentage),
+      'Purchase Date': formatDateForTableDisplay(r.datepurchase),
+      'Expiry Date': formatDateForTableDisplay(r.expiry),
+      'Expiry Days': formatFloat(r.expiryDays),
       'Item Used For': r.itemused,
       'Description 1': r.itemdesc1,
       'Description 2': r.itemdesc2,
@@ -303,110 +425,136 @@
         <button on:click={exportExcel} class="btn excel-btn"
           >Export Excel</button
         >
+        <button
+          on:click={() => showAddForm.update((val) => !val)}
+          class="btn add-new-toggle-btn"
+        >
+          {$showAddForm ? 'Hide Add Form' : 'Add New Record'}
+        </button>
       </div>
     </div>
 
-    <div class="add-form">
-      <h3>Add New Inwards Record</h3>
-      <form on:submit|preventDefault={addInwards}>
-        <div class="form-group">
-          <label for="addBatchCode">Batch Code:</label>
-          <input
-            id="addBatchCode"
-            bind:value={addBatchCode}
-            type="text"
-            required
-          />
-        </div>
-        <div class="form-group">
-          <label for="addItemCode">Item Code:</label>
-          <input
-            id="addItemCode"
-            bind:value={addItemCode}
-            type="text"
-            required
-          />
-        </div>
-        <div class="form-group">
-          <label for="addSuppCode">Supplier Code:</label>
-          <input
-            id="addSuppCode"
-            bind:value={addSuppCode}
-            type="text"
-            required
-          />
-        </div>
-        <div class="form-group">
-          <label for="addRequestedQty">Requested Quantity:</label>
-          <input
-            id="addRequestedQty"
-            type="number"
-            bind:value={addRequestedQty}
-            min="0"
-            required
-          />
-        </div>
-        <div class="form-group">
-          <label for="addReceivedQty">Received Quantity:</label>
-          <input
-            id="addReceivedQty"
-            type="number"
-            bind:value={addReceivedQty}
-            min="0"
-            required
-          />
-        </div>
-        <div class="form-group">
-          <label for="addPurchasePrice">Purchase Price/Unit:</label>
-          <input
-            id="addPurchasePrice"
-            type="number"
-            bind:value={addPurchasePrice}
-            step="0.01"
-            min="0"
-            required
-          />
-        </div>
-        <div class="form-group">
-          <label for="addDatePurchase">Purchase Date:</label>
-          <input
-            id="addDatePurchase"
-            type="date"
-            bind:value={addDatePurchase}
-            required
-          />
-        </div>
-        <div class="form-group">
-          <label for="addExpiryDays">Expiry Days (from purchase):</label>
-          <input
-            id="addExpiryDays"
-            type="number"
-            bind:value={addExpiryDays}
-            min="0"
-            required
-          />
-        </div>
-        <div class="form-group">
-          <label for="addItemUsed">Item Used For:</label>
-          <input id="addItemUsed" bind:value={addItemUsed} type="text" />
-        </div>
-        <div class="form-group">
-          <label for="addDesc1">Description 1:</label>
-          <input id="addDesc1" bind:value={addDesc1} type="text" />
-        </div>
-        <div class="form-group">
-          <label for="addDesc2">Description 2:</label>
-          <input id="addDesc2" bind:value={addDesc2} type="text" />
-        </div>
-        <div class="form-group">
-          <label for="addDesc3">Description 3:</label>
-          <input id="addDesc3" bind:value={addDesc3} type="text" />
-        </div>
-        <div class="form-action">
-          <button type="submit" class="btn add-btn">Add Record</button>
-        </div>
-      </form>
-    </div>
+    {#if $showAddForm}
+      <div class="add-form">
+        <h3>Add New Inwards Record</h3>
+        <form on:submit|preventDefault={addInwards}>
+          <div class="form-group">
+            <label for="addBatchCode">Batch Code:</label>
+            <input
+              id="addBatchCode"
+              bind:value={addBatchCode}
+              type="text"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="addItemCode">Item Code:</label>
+            <select id="addItemCode" bind:value={addItemCode} required>
+              <option value="" disabled>Select an Item</option>
+              {#each $itemOptions as item}
+                <option value={item.itemcode}
+                  >{item.itemname} ({item.itemcode})</option
+                >
+              {/each}
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="addSuppCode">Supplier Code:</label>
+            <select id="addSuppCode" bind:value={addSuppCode} required>
+              <option value="" disabled>Select a Supplier</option>
+              {#each $supplierOptions as supplier}
+                <option value={supplier.suppcode}
+                  >{supplier.suppname} ({supplier.suppcode})</option
+                >
+              {/each}
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="addRequestedQty">Requested Quantity:</label>
+            <input
+              id="addRequestedQty"
+              type="number"
+              bind:value={addRequestedQty}
+              min="0"
+              step="0.001"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="addReceivedQty">Received Quantity:</label>
+            <input
+              id="addReceivedQty"
+              type="number"
+              bind:value={addReceivedQty}
+              min="0"
+              step="0.001"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="addPurchasePrice">Purchase Price/Unit:</label>
+            <input
+              id="addPurchasePrice"
+              type="number"
+              bind:value={addPurchasePrice}
+              step="0.001"
+              min="0"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="addEstimatePercentage">Estimated Profit (%):</label>
+            <input
+              id="addEstimatePercentage"
+              type="number"
+              bind:value={addEstimatePercentage}
+              step="0.01"
+              min="0"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="addDatePurchase">Purchase Date (DD/MM/YYYY):</label>
+            <input
+              id="addDatePurchase"
+              type="text"
+              bind:value={addDatePurchase}
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="addExpiryDays">Expiry Days (from purchase):</label>
+            <input
+              id="addExpiryDays"
+              type="number"
+              bind:value={addExpiryDays}
+              min="0"
+              step="0.001"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="addItemUsed">Item Used For:</label>
+            <input id="addItemUsed" bind:value={addItemUsed} type="text" />
+          </div>
+          <div class="form-group">
+            <label for="addDesc1">Description 1:</label>
+            <input id="addDesc1" bind:value={addDesc1} type="text" />
+          </div>
+          <div class="form-group">
+            <label for="addDesc2">Description 2:</label>
+            <input id="addDesc2" bind:value={addDesc2} type="text" />
+          </div>
+          <div class="form-group">
+            <label for="addDesc3">Description 3:</label>
+            <input id="addDesc3" bind:value={addDesc3} type="text" />
+          </div>
+          <div class="form-action">
+            <button type="submit" class="btn add-btn">Add Record</button>
+          </div>
+        </form>
+      </div>
+    {/if}
 
     {#if $isLoading && $rawInwards.length === 0}
       <p class="status">Loading inwards records...</p>
@@ -427,6 +575,7 @@
               <th>Req. Qty</th>
               <th>Rec. Qty</th>
               <th>Price/Unit</th>
+              <th>Est. Profit (%)</th>
               <th>P. Date</th>
               <th>Exp. Date</th>
               <th>Exp. Days</th>
@@ -443,14 +592,26 @@
                 <td>{r.batchcode ?? 'N/A'}</td>
                 <td>
                   {#if $editingBatchCode === r.batchcode}
-                    <input type="text" bind:value={editedItemCode} required />
+                    <select bind:value={editedItemCode} required>
+                      {#each $itemOptions as item}
+                        <option value={item.itemcode}
+                          >{item.itemname} ({item.itemcode})</option
+                        >
+                      {/each}
+                    </select>
                   {:else}
                     {r.itemcode ?? 'N/A'}
                   {/if}
                 </td>
                 <td>
                   {#if $editingBatchCode === r.batchcode}
-                    <input type="text" bind:value={editedSuppCode} required />
+                    <select bind:value={editedSuppCode} required>
+                      {#each $supplierOptions as supplier}
+                        <option value={supplier.suppcode}
+                          >{supplier.suppname} ({supplier.suppcode})</option
+                        >
+                      {/each}
+                    </select>
                   {:else}
                     {r.suppcode ?? 'N/A'}
                   {/if}
@@ -461,10 +622,11 @@
                       type="number"
                       bind:value={editedRequestedQty}
                       min="0"
+                      step="0.001"
                       required
                     />
                   {:else}
-                    {r.requestedqty ?? 'N/A'}
+                    {formatFloat(r.requestedqty)}
                   {/if}
                 </td>
                 <td>
@@ -473,10 +635,11 @@
                       type="number"
                       bind:value={editedReceivedQty}
                       min="0"
+                      step="0.001"
                       required
                     />
                   {:else}
-                    {r.receivedqty ?? 'N/A'}
+                    {formatFloat(r.receivedqty)}
                   {/if}
                 </td>
                 <td>
@@ -484,7 +647,7 @@
                     <input
                       type="number"
                       bind:value={editedPurchasePrice}
-                      step="0.01"
+                      step="0.001"
                       min="0"
                       required
                     />
@@ -495,25 +658,41 @@
                 <td>
                   {#if $editingBatchCode === r.batchcode}
                     <input
-                      type="date"
-                      bind:value={editedDatePurchase}
+                      type="number"
+                      bind:value={editedEstimatePercentage}
+                      step="0.01"
+                      min="0"
                       required
                     />
                   {:else}
-                    {formatDateForDisplay(r.datepurchase)}
+                    {formatPercentage(r.estimate_percentage)}
                   {/if}
                 </td>
-                <td>{formatDateForDisplay(r.expiry)}</td>
+                <td>
+                  {#if $editingBatchCode === r.batchcode}
+                    <input
+                      id="editedDatePurchase"
+                      type="text"
+                      bind:value={editedDatePurchase}
+                      use:initEditFlatpickr
+                      required
+                    />
+                  {:else}
+                    {formatDateForTableDisplay(r.datepurchase)}
+                  {/if}
+                </td>
+                <td>{formatDateForTableDisplay(r.expiry)}</td>
                 <td>
                   {#if $editingBatchCode === r.batchcode}
                     <input
                       type="number"
                       bind:value={editedExpiryDays}
                       min="0"
+                      step="0.001"
                       required
                     />
                   {:else}
-                    {r.expiryDays ?? 'N/A'}
+                    {formatFloat(r.expiryDays)}
                   {/if}
                 </td>
                 <td>
@@ -625,10 +804,14 @@
     color: #fff;
     border-color: #28a745;
   }
-  .add-btn {
+  .add-new-toggle-btn {
     background-color: #007bff;
     color: #fff;
-    border-color: #007bff;
+  }
+  .add-btn {
+    background-color: #28a745;
+    color: #fff;
+    border-color: #28a745;
   }
   .edit-btn {
     background-color: #ffc107;
@@ -662,6 +845,7 @@
     border-radius: 6px;
     padding: 1.5rem;
     margin-bottom: 1.5rem;
+    transition: all 0.3s ease-in-out;
   }
   .add-form h3 {
     margin-top: 0;
@@ -684,7 +868,8 @@
   }
   .add-form input[type='text'],
   .add-form input[type='number'],
-  .add-form input[type='date'] {
+  .add-form input[type='date'],
+  .add-form select {
     width: 100%;
     padding: 0.6rem;
     border: 1px solid #ced4da;
@@ -693,9 +878,9 @@
     box-sizing: border-box;
   }
   .form-action {
-    grid-column: 1 / -1; /* Span all columns */
+    grid-column: 1 / -1;
     display: flex;
-    justify-content: flex-end; /* Push button to the right */
+    justify-content: flex-end;
     margin-top: 1rem;
   }
   .add-form button[type='submit'] {

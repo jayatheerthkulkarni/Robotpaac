@@ -29,6 +29,7 @@ router.get('/', async (req, res) => {
         i.requestedqty,
         i.receivedqty,
         i.purchase_price_per_unit,
+        i.estimate_percentage,
         i.datepurchase,
         i.expiry,
         inv.itemused,
@@ -45,6 +46,30 @@ router.get('/', async (req, res) => {
   }
 });
 
+router.get('/item-list', async (req, res) => {
+  try {
+    const items = await dbAll(
+      'SELECT itemcode, itemname FROM itemlist ORDER BY itemname',
+    );
+    res.json(items);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to retrieve item list.' });
+  }
+});
+
+router.get('/supplier-list', async (req, res) => {
+  try {
+    const suppliers = await dbAll(
+      'SELECT suppcode, suppname FROM suppliers ORDER BY suppname',
+    );
+    res.json(suppliers);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to retrieve supplier list.' });
+  }
+});
+
 router.post('/', async (req, res) => {
   const {
     batchcode,
@@ -53,6 +78,7 @@ router.post('/', async (req, res) => {
     requestedqty,
     receivedqty,
     purchase_price_per_unit,
+    estimate_percentage,
     datepurchase,
     expiryDays,
     itemused,
@@ -83,20 +109,26 @@ router.post('/', async (req, res) => {
     requestedqty === undefined ||
     receivedqty === undefined ||
     purchase_price_per_unit === undefined ||
+    estimate_percentage === undefined ||
     !datepurchase ||
     expiryDays === undefined ||
     expiryDays === null
   ) {
     return res.status(400).json({
       error:
-        'All core fields (batchcode, itemcode, suppcode, requestedqty, receivedqty, purchase_price_per_unit, datepurchase, expiryDays) are required.',
+        'All core fields (batchcode, itemcode, suppcode, requestedqty, receivedqty, purchase_price_per_unit, estimate_percentage, datepurchase, expiryDays) are required.',
     });
   }
 
-  if (receivedqty < 0 || requestedqty < 0 || purchase_price_per_unit < 0) {
+  if (
+    receivedqty < 0 ||
+    requestedqty < 0 ||
+    purchase_price_per_unit < 0 ||
+    estimate_percentage < 0
+  ) {
     return res
       .status(400)
-      .json({ error: 'Quantities and price cannot be negative.' });
+      .json({ error: 'Quantities, price, and percentage cannot be negative.' });
   }
   if (receivedqty > requestedqty) {
     return res
@@ -116,26 +148,47 @@ router.post('/', async (req, res) => {
       return res.status(409).json({ error: 'Batch code already exists.' });
     }
 
+    const itemExists = await dbGet(
+      'SELECT 1 FROM itemlist WHERE itemcode = ?',
+      itemcode,
+    );
+    if (!itemExists) {
+      await dbRun('ROLLBACK');
+      return res
+        .status(400)
+        .json({ error: `Item code '${itemcode}' does not exist.` });
+    }
+    const supplierExists = await dbGet(
+      'SELECT 1 FROM suppliers WHERE suppcode = ?',
+      suppcode,
+    );
+    if (!supplierExists) {
+      await dbRun('ROLLBACK');
+      return res
+        .status(400)
+        .json({ error: `Supplier code '${suppcode}' does not exist.` });
+    }
+
     await dbRun(
-      'INSERT INTO inwards (batchcode, itemcode, suppcode, requestedqty, receivedqty, purchase_price_per_unit, datepurchase, expiry) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO inwards (batchcode, itemcode, suppcode, requestedqty, receivedqty, purchase_price_per_unit, estimate_percentage, datepurchase, expiry) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       batchcode,
       itemcode,
+      suppcode,
       requestedqty,
       receivedqty,
       purchase_price_per_unit,
+      estimate_percentage,
       datepurchase,
       expiryDate,
     );
 
     await dbRun(
-      'INSERT INTO inventory (batchcode, itemcode, qty, itemused, itemdesc1, itemdesc2, itemdesc3) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      batchcode,
-      itemcode,
-      receivedqty,
+      'UPDATE inventory SET itemused = ?, itemdesc1 = ?, itemdesc2 = ?, itemdesc3 = ? WHERE batchcode = ?',
       itemused || null,
       itemdesc1 || null,
       itemdesc2 || null,
       itemdesc3 || null,
+      batchcode,
     );
 
     await dbRun('COMMIT');
@@ -166,6 +219,7 @@ router.put('/:batchcode', async (req, res) => {
     requestedqty,
     receivedqty,
     purchase_price_per_unit,
+    estimate_percentage,
     datepurchase,
     expiryDays,
     itemused,
@@ -182,12 +236,13 @@ router.put('/:batchcode', async (req, res) => {
   let oldRequestedQty;
   let currentInventoryQty;
   let oldPurchaseDate;
+  let oldEstimatePercentage;
 
   try {
     await dbRun('BEGIN TRANSACTION');
 
     const inwardsRecord = await dbGet(
-      'SELECT requestedqty, receivedqty, datepurchase, expiry FROM inwards WHERE batchcode = ?',
+      'SELECT requestedqty, receivedqty, datepurchase, expiry, estimate_percentage FROM inwards WHERE batchcode = ?',
       batchcode,
     );
     if (!inwardsRecord) {
@@ -197,6 +252,7 @@ router.put('/:batchcode', async (req, res) => {
     oldReceivedQty = inwardsRecord.receivedqty;
     oldRequestedQty = inwardsRecord.requestedqty;
     oldPurchaseDate = inwardsRecord.datepurchase;
+    oldEstimatePercentage = inwardsRecord.estimate_percentage;
 
     const inventoryRecord = await dbGet(
       'SELECT qty FROM inventory WHERE batchcode = ?',
@@ -215,16 +271,22 @@ router.put('/:batchcode', async (req, res) => {
       requestedqty !== undefined ? requestedqty : oldRequestedQty;
     const newReceivedQty =
       receivedqty !== undefined ? receivedqty : oldReceivedQty;
+    const newEstimatePercentage =
+      estimate_percentage !== undefined
+        ? estimate_percentage
+        : oldEstimatePercentage;
 
     if (
       newReceivedQty < 0 ||
       newRequestedQty < 0 ||
       (purchase_price_per_unit !== undefined && purchase_price_per_unit < 0) ||
+      (newEstimatePercentage !== undefined && newEstimatePercentage < 0) ||
       (expiryDays !== undefined && expiryDays < 0)
     ) {
       await dbRun('ROLLBACK');
       return res.status(400).json({
-        error: 'Quantities, price, and expiry days cannot be negative.',
+        error:
+          'Quantities, price, percentage, and expiry days cannot be negative.',
       });
     }
 
@@ -248,10 +310,30 @@ router.put('/:batchcode', async (req, res) => {
     let calculatedExpiryDate = inwardsRecord.expiry;
 
     if (itemcode !== undefined) {
+      const itemExists = await dbGet(
+        'SELECT 1 FROM itemlist WHERE itemcode = ?',
+        itemcode,
+      );
+      if (!itemExists) {
+        await dbRun('ROLLBACK');
+        return res
+          .status(400)
+          .json({ error: `Item code '${itemcode}' does not exist.` });
+      }
       updateInwardsFields.push('itemcode = ?');
       updateInwardsValues.push(itemcode);
     }
     if (suppcode !== undefined) {
+      const supplierExists = await dbGet(
+        'SELECT 1 FROM suppliers WHERE suppcode = ?',
+        suppcode,
+      );
+      if (!supplierExists) {
+        await dbRun('ROLLBACK');
+        return res
+          .status(400)
+          .json({ error: `Supplier code '${suppcode}' does not exist.` });
+      }
       updateInwardsFields.push('suppcode = ?');
       updateInwardsValues.push(suppcode);
     }
@@ -267,6 +349,10 @@ router.put('/:batchcode', async (req, res) => {
       updateInwardsFields.push('purchase_price_per_unit = ?');
       updateInwardsValues.push(purchase_price_per_unit);
     }
+    if (estimate_percentage !== undefined) {
+      updateInwardsFields.push('estimate_percentage = ?');
+      updateInwardsValues.push(estimate_percentage);
+    }
 
     const currentPurchaseDate =
       datepurchase !== undefined ? datepurchase : oldPurchaseDate;
@@ -280,7 +366,6 @@ router.put('/:batchcode', async (req, res) => {
           ? parseInt(expiryDays)
           : calculateExpiryDays(oldPurchaseDate, inwardsRecord.expiry);
       if (isNaN(pDateObj.getTime()) || eDays === null || eDays < 0) {
-        // Added eDays validation
         await dbRun('ROLLBACK');
         return res.status(400).json({
           error: 'Invalid purchase date or expiry days for recalculation.',
@@ -352,19 +437,14 @@ router.put('/:batchcode', async (req, res) => {
   }
 });
 
-/**
- *  Cause why not ;)
- *  Fun UX
- *  Nobody cares about devs anymore
- */
 function calculateExpiryDays(purchaseDateStr, expiryDateStr) {
   if (!purchaseDateStr || !expiryDateStr) return null;
   const pDate = new Date(purchaseDateStr);
   const eDate = new Date(expiryDateStr);
   if (isNaN(pDate.getTime()) || isNaN(eDate.getTime())) return null;
 
-  const diffTime = eDate.getTime() - pDate.getTime(); // Removed Math.abs here, it should be a directional diff
-  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)); // Round for more accuracy with date math
+  const diffTime = eDate.getTime() - pDate.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
   return diffDays;
 }
 

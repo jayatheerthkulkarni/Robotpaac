@@ -20,6 +20,7 @@ import cors from 'cors';
 import suppliers from './suppliers';
 import customers from './customer';
 import inwards from './inwards';
+import outwards from './outwards';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -53,6 +54,11 @@ const path_to_rendered_inwards = path.join(
   '/inwards/index.html',
 );
 
+const path_to_rendered_outwards = path.join(
+  path_to_rendered,
+  '/outwards/index.html',
+);
+
 dotenv.config({ path: '../env/.env' }); /*Do create the file*/
 
 const app = express();
@@ -68,6 +74,7 @@ app.use('/api/master', master);
 app.use('/api/suppliers', suppliers);
 app.use('/api/customers', customers);
 app.use('/api/inwards', inwards);
+app.use('/api/outwards', outwards);
 
 app.get('/', (req, res) => {
   res.sendFile(path_to_rendered_home);
@@ -87,6 +94,10 @@ app.get('/customers', (req, res) => {
 
 app.get('/inwards', (req, res) => {
   res.sendFile(path_to_rendered_inwards);
+});
+
+app.get('/outwards', (req, res) => {
+  res.sendFile(path_to_rendered_outwards);
 });
 
 app.listen(port, () => {

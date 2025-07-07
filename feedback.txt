@@ -1,16 +1,22 @@
+###
 
-Add total stock note for selected day.
-####
-Dropdown for all the existing items codes supp codes and cust codes
-Master items
-####
-Date to dd/mm/yyyy
-####
-BOM copy from other BOMs
-####
-Selling a BOM 
-BOM master
-####
-Delivary challan for 
-reference in Outward
-####
+Item code belongs to table 
+
+###
+
+One desc in the item codes 
+
+### 
+
+Invoice document reference. Inwards and outwards
+
+###
+
+Seperate feilds for mail and numbers cust and supp and Address
+
+###
+
+Blacklisting supp and customers
+
+###
+

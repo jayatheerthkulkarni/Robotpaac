@@ -110,6 +110,13 @@ BEGIN
     VALUES (NEW.batchcode, NEW.itemcode, NEW.receivedqty);
 END;
 
+CREATE TRIGGER trg_delete_inventory_on_zero_qty
+AFTER UPDATE OF qty ON inventory
+WHEN NEW.qty <= 0
+BEGIN
+    DELETE FROM inventory WHERE batchcode = NEW.batchcode;
+END;
+
 CREATE TABLE units (
     itemcode VARCHAR(13) PRIMARY KEY,
     unit_name VARCHAR(20) NOT NULL,

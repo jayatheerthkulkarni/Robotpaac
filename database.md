@@ -159,6 +159,17 @@ BEGIN
 END;
 ```
 
+And finally this trigger just yeets out the record from the 
+inventory when the value drops to zero.
+```sql
+CREATE TRIGGER trg_delete_inventory_on_zero_qty
+AFTER UPDATE OF qty ON inventory
+WHEN NEW.qty <= 0
+BEGIN
+    DELETE FROM inventory WHERE batchcode = NEW.batchcode;
+END;
+```
+
 ---
 
 ## Table Summary

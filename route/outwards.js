@@ -26,16 +26,16 @@ router.get('/', async (req, res) => {
         o.outid,
         o.batchcode,
         o.custcode,
-        c.custname,
+        c.custname,       -- This will be NULL if no matching customer
         o.qty,
         o.selling_price_per_unit,
         o.dateout,
-        il.itemcode,
-        il.itemname
+        il.itemcode,      -- This will be NULL if no matching itemlist
+        il.itemname       -- This will be NULL if no matching itemlist
       FROM outwards o
-      JOIN customers c ON o.custcode = c.custcode
-      JOIN inventory inv ON o.batchcode = inv.batchcode
-      JOIN itemlist il ON inv.itemcode = il.itemcode
+      LEFT JOIN customers c ON o.custcode = c.custcode
+      LEFT JOIN inventory inv ON o.batchcode = inv.batchcode
+      LEFT JOIN itemlist il ON inv.itemcode = il.itemcode
       ORDER BY o.dateout DESC`,
     );
     res.json(rows);
@@ -152,6 +152,66 @@ router.delete('/:outid', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to delete outwards record.' });
+  }
+});
+
+router.put('/:outid', async (req, res) => {
+  const { outid } = req.params;
+  const {
+    batchcode,
+    custcode,
+    qty,
+    selling_price_per_unit,
+    dateout,
+  } = req.body;
+
+  if (
+    !batchcode ||
+    !custcode ||
+    qty === undefined ||
+    selling_price_per_unit === undefined ||
+    !dateout
+  ) {
+    return res.status(400).json({ error: 'All fields are required.' });
+  }
+
+  if (qty <= 0 || selling_price_per_unit < 0) {
+    return res.status(400).json({ error: 'Quantity must be positive, selling price non-negative.' });
+  }
+
+  try {
+    await dbRun('BEGIN TRANSACTION');
+
+    const existingOutward = await dbGet('SELECT * FROM outwards WHERE outid = ?', outid);
+    if (!existingOutward) {
+      await dbRun('ROLLBACK');
+      return res.status(404).json({ error: 'Outwards record not found.' });
+    }
+
+    const customerExists = await dbGet('SELECT 1 FROM customers WHERE custcode = ?', custcode);
+    if (!customerExists) {
+      await dbRun('ROLLBACK');
+      return res.status(400).json({ error: `Customer code '${custcode}' does not exist.` });
+    }
+
+    await dbRun(
+      `UPDATE outwards
+       SET batchcode = ?, custcode = ?, qty = ?, selling_price_per_unit = ?, dateout = ?
+       WHERE outid = ?`,
+      batchcode,
+      custcode,
+      qty,
+      selling_price_per_unit,
+      dateout,
+      outid
+    );
+
+    await dbRun('COMMIT');
+    res.json({ success: true, message: 'Outwards record updated.' });
+  } catch (err) {
+    console.error(err);
+    await dbRun('ROLLBACK');
+    res.status(500).json({ error: 'Failed to update outwards record.' });
   }
 });
 

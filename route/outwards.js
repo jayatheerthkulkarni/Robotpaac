@@ -88,11 +88,9 @@ router.post('/', async (req, res) => {
   }
 
   if (qty <= 0 || selling_price_per_unit < 0) {
-    return res
-      .status(400)
-      .json({
-        error: 'Quantity must be positive, selling price non-negative.',
-      });
+    return res.status(400).json({
+      error: 'Quantity must be positive, selling price non-negative.',
+    });
   }
 
   try {
@@ -118,11 +116,9 @@ router.post('/', async (req, res) => {
 
     if (inventoryRecord.qty < qty) {
       await dbRun('ROLLBACK');
-      return res
-        .status(400)
-        .json({
-          error: `Not enough stock in batch. Available: ${inventoryRecord.qty}`,
-        });
+      return res.status(400).json({
+        error: `Not enough stock in batch. Available: ${inventoryRecord.qty}`,
+      });
     }
 
     const customerExists = await dbGet(
@@ -188,11 +184,9 @@ router.put('/:outid', async (req, res) => {
   }
 
   if (qty <= 0 || selling_price_per_unit < 0) {
-    return res
-      .status(400)
-      .json({
-        error: 'Quantity must be positive, selling price non-negative.',
-      });
+    return res.status(400).json({
+      error: 'Quantity must be positive, selling price non-negative.',
+    });
   }
 
   try {

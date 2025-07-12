@@ -60,23 +60,21 @@ router.get('/batch-customer-lists', async (req, res) => {
       WHERE inv.qty > 0
       ORDER BY il.itemname, inv.batchcode
     `);
-    const customers = await dbAll('SELECT custcode, custname FROM customers ORDER BY custname');
+    const customers = await dbAll(
+      'SELECT custcode, custname FROM customers ORDER BY custname',
+    );
     res.json({ batches, customers });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to retrieve batch and customer lists.' });
+    res
+      .status(500)
+      .json({ error: 'Failed to retrieve batch and customer lists.' });
   }
 });
 
 router.post('/', async (req, res) => {
-  const {
-    outid,
-    batchcode,
-    custcode,
-    qty,
-    selling_price_per_unit,
-    dateout,
-  } = req.body;
+  const { outid, batchcode, custcode, qty, selling_price_per_unit, dateout } =
+    req.body;
 
   if (
     !outid ||
@@ -90,19 +88,29 @@ router.post('/', async (req, res) => {
   }
 
   if (qty <= 0 || selling_price_per_unit < 0) {
-    return res.status(400).json({ error: 'Quantity must be positive, selling price non-negative.' });
+    return res
+      .status(400)
+      .json({
+        error: 'Quantity must be positive, selling price non-negative.',
+      });
   }
 
   try {
     await dbRun('BEGIN TRANSACTION');
 
-    const existingOutward = await dbGet('SELECT 1 FROM outwards WHERE outid = ?', outid);
+    const existingOutward = await dbGet(
+      'SELECT 1 FROM outwards WHERE outid = ?',
+      outid,
+    );
     if (existingOutward) {
       await dbRun('ROLLBACK');
       return res.status(409).json({ error: 'Outward ID already exists.' });
     }
 
-    const inventoryRecord = await dbGet('SELECT qty FROM inventory WHERE batchcode = ?', batchcode);
+    const inventoryRecord = await dbGet(
+      'SELECT qty FROM inventory WHERE batchcode = ?',
+      batchcode,
+    );
     if (!inventoryRecord) {
       await dbRun('ROLLBACK');
       return res.status(404).json({ error: 'Batch not found in inventory.' });
@@ -110,13 +118,22 @@ router.post('/', async (req, res) => {
 
     if (inventoryRecord.qty < qty) {
       await dbRun('ROLLBACK');
-      return res.status(400).json({ error: `Not enough stock in batch. Available: ${inventoryRecord.qty}` });
+      return res
+        .status(400)
+        .json({
+          error: `Not enough stock in batch. Available: ${inventoryRecord.qty}`,
+        });
     }
 
-    const customerExists = await dbGet('SELECT 1 FROM customers WHERE custcode = ?', custcode);
+    const customerExists = await dbGet(
+      'SELECT 1 FROM customers WHERE custcode = ?',
+      custcode,
+    );
     if (!customerExists) {
       await dbRun('ROLLBACK');
-      return res.status(400).json({ error: `Customer code '${custcode}' does not exist.` });
+      return res
+        .status(400)
+        .json({ error: `Customer code '${custcode}' does not exist.` });
     }
 
     await dbRun(
@@ -157,13 +174,8 @@ router.delete('/:outid', async (req, res) => {
 
 router.put('/:outid', async (req, res) => {
   const { outid } = req.params;
-  const {
-    batchcode,
-    custcode,
-    qty,
-    selling_price_per_unit,
-    dateout,
-  } = req.body;
+  const { batchcode, custcode, qty, selling_price_per_unit, dateout } =
+    req.body;
 
   if (
     !batchcode ||
@@ -176,22 +188,34 @@ router.put('/:outid', async (req, res) => {
   }
 
   if (qty <= 0 || selling_price_per_unit < 0) {
-    return res.status(400).json({ error: 'Quantity must be positive, selling price non-negative.' });
+    return res
+      .status(400)
+      .json({
+        error: 'Quantity must be positive, selling price non-negative.',
+      });
   }
 
   try {
     await dbRun('BEGIN TRANSACTION');
 
-    const existingOutward = await dbGet('SELECT * FROM outwards WHERE outid = ?', outid);
+    const existingOutward = await dbGet(
+      'SELECT * FROM outwards WHERE outid = ?',
+      outid,
+    );
     if (!existingOutward) {
       await dbRun('ROLLBACK');
       return res.status(404).json({ error: 'Outwards record not found.' });
     }
 
-    const customerExists = await dbGet('SELECT 1 FROM customers WHERE custcode = ?', custcode);
+    const customerExists = await dbGet(
+      'SELECT 1 FROM customers WHERE custcode = ?',
+      custcode,
+    );
     if (!customerExists) {
       await dbRun('ROLLBACK');
-      return res.status(400).json({ error: `Customer code '${custcode}' does not exist.` });
+      return res
+        .status(400)
+        .json({ error: `Customer code '${custcode}' does not exist.` });
     }
 
     await dbRun(
@@ -203,7 +227,7 @@ router.put('/:outid', async (req, res) => {
       qty,
       selling_price_per_unit,
       dateout,
-      outid
+      outid,
     );
 
     await dbRun('COMMIT');

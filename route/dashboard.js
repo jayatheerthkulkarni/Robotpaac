@@ -351,4 +351,92 @@ router.get('/top/customers', (req, res) => {
   });
 });
 
+router.get('/items/summary', (req, res) => {
+  const query = `
+    SELECT 
+      il.itemcode,
+      il.itemname,
+      il.min_stock_level,
+      EXISTS (SELECT 1 FROM inwards iw WHERE iw.itemcode = il.itemcode) AS used_in_inwards,
+      EXISTS (SELECT 1 FROM inventory inv WHERE inv.itemcode = il.itemcode) AS used_in_inventory,
+      EXISTS (
+        SELECT 1 FROM outwards o
+        JOIN inventory inv ON o.batchcode = inv.batchcode
+        WHERE inv.itemcode = il.itemcode
+      ) AS used_in_outwards
+    FROM itemlist il
+    ORDER BY il.itemname COLLATE NOCASE;
+  `;
+  db.all(query, [], (err, rows) => {
+    if (err) {
+      console.error('Error fetching item summary:', err);
+      res.status(500).json({ error: 'Could not fetch item summary' });
+    } else {
+      res.json(rows || []);
+    }
+  });
+});
+
+router.delete('/item/:itemcode', (req, res) => {
+  const { itemcode } = req.params;
+
+  const usageCheckQuery = `
+    SELECT 
+      EXISTS (SELECT 1 FROM inwards WHERE itemcode = ?) AS in_inwards,
+      EXISTS (SELECT 1 FROM inventory WHERE itemcode = ?) AS in_inventory,
+      EXISTS (
+        SELECT 1 FROM outwards o
+        JOIN inventory inv ON inv.batchcode = o.batchcode
+        WHERE inv.itemcode = ?
+      ) AS in_outwards;
+  `;
+
+  db.get(
+    usageCheckQuery,
+    [itemcode, itemcode, itemcode],
+    (err, usageResult) => {
+      if (err) {
+        console.error('Error checking item usage:', err);
+        return res
+          .status(500)
+          .json({ error: 'Internal error while checking usage' });
+      }
+
+      if (
+        usageResult.in_inwards ||
+        usageResult.in_inventory ||
+        usageResult.in_outwards
+      ) {
+        return res
+          .status(400)
+          .json({ error: 'Item is in use and cannot be deleted' });
+      }
+
+      db.serialize(() => {
+        const deleteUnitQuery = `DELETE FROM units WHERE itemcode = ?`;
+        const deleteItemQuery = `DELETE FROM itemlist WHERE itemcode = ?`;
+
+        db.run(deleteUnitQuery, [itemcode], (err1) => {
+          if (err1) {
+            console.error('Failed to delete unit:', err1);
+            return res.status(500).json({ error: 'Failed to delete unit' });
+          }
+
+          db.run(deleteItemQuery, [itemcode], function (err2) {
+            if (err2) {
+              console.error('Failed to delete item:', err2);
+              return res.status(500).json({ error: 'Failed to delete item' });
+            }
+
+            res.json({
+              success: true,
+              message: `Item ${itemcode} and its unit deleted.`,
+            });
+          });
+        });
+      });
+    },
+  );
+});
+
 export default router;

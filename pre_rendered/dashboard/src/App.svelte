@@ -60,7 +60,7 @@
           class={onComponent(Totalbatches)}
           onclick={() => nameChange(Totalbatches)}
         >
-          Batch Details
+          Item Details
         </button>
         <button
           class={onComponent(Lowstock)}

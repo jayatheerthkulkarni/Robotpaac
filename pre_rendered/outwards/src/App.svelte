@@ -42,7 +42,10 @@
       const res = await axios.get(OUTWARDS_API_URL);
       rawOutwards.set(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      const msg = err.response?.data?.error || err.message || 'Failed to fetch outwards records.';
+      const msg =
+        err.response?.data?.error ||
+        err.message ||
+        'Failed to fetch outwards records.';
       errorMessage.set(msg);
       rawOutwards.set([]);
     } finally {
@@ -121,19 +124,24 @@
   }
 
   // --- Derived Store for Filtering ---
-  const filteredOutwards = derived([rawOutwards, searchTerm], ([$raw, $term]) => {
-    if (!$term.trim()) return $raw;
-    const term = $term.toLowerCase();
-    return $raw.filter((r) =>
-      Object.values(r).some((v) => v != null && String(v).toLowerCase().includes(term)),
-    );
-  });
+  const filteredOutwards = derived(
+    [rawOutwards, searchTerm],
+    ([$raw, $term]) => {
+      if (!$term.trim()) return $raw;
+      const term = $term.toLowerCase();
+      return $raw.filter((r) =>
+        Object.values(r).some(
+          (v) => v != null && String(v).toLowerCase().includes(term),
+        ),
+      );
+    },
+  );
 
   // --- CRUD Functions ---
   async function addOutwards() {
     errorMessage.set('');
 
-    const selectedBatch = $batches.find(b => b.batchcode === addBatchCode);
+    const selectedBatch = $batches.find((b) => b.batchcode === addBatchCode);
     const availableStock = selectedBatch ? selectedBatch.current_stock : 0;
 
     const newRecord = {
@@ -155,12 +163,16 @@
       newRecord.selling_price_per_unit < 0 ||
       !newRecord.dateout
     ) {
-      errorMessage.set('Please fill all required fields correctly (quantity positive, price non-negative, and date valid).');
+      errorMessage.set(
+        'Please fill all required fields correctly (quantity positive, price non-negative, and date valid).',
+      );
       return;
     }
 
     if (newRecord.qty > availableStock) {
-      errorMessage.set(`Not enough stock in batch ${addBatchCode}. Available: ${formatFloat(availableStock)}`);
+      errorMessage.set(
+        `Not enough stock in batch ${addBatchCode}. Available: ${formatFloat(availableStock)}`,
+      );
       return;
     }
 
@@ -176,7 +188,11 @@
       await fetchBatchCustomerLists(); // Refresh stock levels
       showAddForm.set(false);
     } catch (err) {
-      const msg = err.response?.data?.error || err.response?.statusText || err.message || 'Failed to add outwards record.';
+      const msg =
+        err.response?.data?.error ||
+        err.response?.statusText ||
+        err.message ||
+        'Failed to add outwards record.';
       errorMessage.set(`Error adding outwards record: ${msg}`);
     }
   }
@@ -188,7 +204,9 @@
     editedCustCode = record.custcode;
     editedQty = record.qty;
     editedSellingPrice = record.selling_price_per_unit;
-    editedDateOut = record.dateout ? new Date(record.dateout).toISOString().split('T')[0] : '';
+    editedDateOut = record.dateout
+      ? new Date(record.dateout).toISOString().split('T')[0]
+      : '';
   }
 
   function cancelEdit() {
@@ -199,10 +217,10 @@
   async function saveEdit(outid) {
     errorMessage.set('');
 
-    const originalRecord = get(rawOutwards).find(o => o.outid === outid);
+    const originalRecord = get(rawOutwards).find((o) => o.outid === outid);
     if (!originalRecord) {
-        errorMessage.set("Cannot find original record to save.");
-        return;
+      errorMessage.set('Cannot find original record to save.');
+      return;
     }
 
     const updatedFields = {
@@ -222,20 +240,26 @@
       updatedFields.selling_price_per_unit < 0 ||
       !updatedFields.dateout
     ) {
-      errorMessage.set('Edited fields must be valid (quantity positive, price non-negative, and date valid).');
+      errorMessage.set(
+        'Edited fields must be valid (quantity positive, price non-negative, and date valid).',
+      );
       return;
     }
 
     // Stock validation
-    const selectedBatch = $batches.find(b => b.batchcode === updatedFields.batchcode);
+    const selectedBatch = $batches.find(
+      (b) => b.batchcode === updatedFields.batchcode,
+    );
     let availableStock = selectedBatch ? selectedBatch.current_stock : 0;
     if (updatedFields.batchcode === originalRecord.batchcode) {
-        availableStock += originalRecord.qty; // Temporarily add back original qty for calculation
+      availableStock += originalRecord.qty; // Temporarily add back original qty for calculation
     }
-    
+
     if (updatedFields.qty > availableStock) {
-        errorMessage.set(`Not enough stock in batch ${updatedFields.batchcode}. Available for this transaction: ${formatFloat(availableStock)}`);
-        return;
+      errorMessage.set(
+        `Not enough stock in batch ${updatedFields.batchcode}. Available for this transaction: ${formatFloat(availableStock)}`,
+      );
+      return;
     }
 
     try {
@@ -244,7 +268,10 @@
       await fetchBatchCustomerLists(); // Refresh stock levels
       cancelEdit();
     } catch (err) {
-      const msg = err.response?.data?.error || err.message || 'Failed to update outwards record.';
+      const msg =
+        err.response?.data?.error ||
+        err.message ||
+        'Failed to update outwards record.';
       errorMessage.set(`Error updating outwards record: ${msg}`);
     }
   }
@@ -263,7 +290,7 @@
       'Item Name': r.itemname,
       'Customer Code': r.custcode,
       'Customer Name': r.custname,
-      'Quantity': formatFloat(r.qty),
+      Quantity: formatFloat(r.qty),
       'Selling Price Per Unit': formatFloat(r.selling_price_per_unit),
       'Date Out': formatDateForDisplay(r.dateout),
     }));
@@ -287,8 +314,13 @@
           placeholder="Search all fields..."
           class="search-input"
         />
-        <button on:click={exportExcel} class="btn excel-btn">Export Excel</button>
-        <button on:click={() => showAddForm.update(val => !val)} class="btn add-new-toggle-btn">
+        <button on:click={exportExcel} class="btn excel-btn"
+          >Export Excel</button
+        >
+        <button
+          on:click={() => showAddForm.update((val) => !val)}
+          class="btn add-new-toggle-btn"
+        >
           {$showAddForm ? 'Hide Add Form' : 'Add New Record'}
         </button>
       </div>
@@ -308,7 +340,9 @@
               <option value="" disabled>Select a Batch</option>
               {#each $batches as batch}
                 <option value={batch.batchcode}>
-                  {batch.itemname} ({batch.batchcode}) - Stock: {formatFloat(batch.current_stock)}
+                  {batch.itemname} ({batch.batchcode}) - Stock: {formatFloat(
+                    batch.current_stock,
+                  )}
                 </option>
               {/each}
             </select>
@@ -318,21 +352,43 @@
             <select id="addCustCode" bind:value={addCustCode} required>
               <option value="" disabled>Select a Customer</option>
               {#each $customers as customer}
-                <option value={customer.custcode}>{customer.custname} ({customer.custcode})</option>
+                <option value={customer.custcode}
+                  >{customer.custname} ({customer.custcode})</option
+                >
               {/each}
             </select>
           </div>
           <div class="form-group">
             <label for="addQty">Quantity:</label>
-            <input id="addQty" type="number" bind:value={addQty} min="0.001" step="0.001" required />
+            <input
+              id="addQty"
+              type="number"
+              bind:value={addQty}
+              min="0.001"
+              step="0.001"
+              required
+            />
           </div>
           <div class="form-group">
             <label for="addSellingPrice">Selling Price/Unit:</label>
-            <input id="addSellingPrice" type="number" bind:value={addSellingPrice} min="0" step="0.001" required />
+            <input
+              id="addSellingPrice"
+              type="number"
+              bind:value={addSellingPrice}
+              min="0"
+              step="0.001"
+              required
+            />
           </div>
           <div class="form-group">
             <label for="addDateOut">Date Out:</label>
-            <input id="addDateOut" type="text" bind:value={addDateOut} use:flatpickrAction required />
+            <input
+              id="addDateOut"
+              type="text"
+              bind:value={addDateOut}
+              use:flatpickrAction
+              required
+            />
           </div>
           <div class="form-action">
             <button type="submit" class="btn add-btn">Add Record</button>
@@ -370,13 +426,17 @@
                 <td>{r.outid ?? 'N/A'}</td>
                 <td>
                   {#if $editingOutId === r.outid}
-                     <select class="edit-input" bind:value={editedBatchCode} required>
-                        {#each $batches as batch}
-                            <option value={batch.batchcode}>
-                                {batch.batchcode} ({batch.itemname})
-                            </option>
-                        {/each}
-                     </select>
+                    <select
+                      class="edit-input"
+                      bind:value={editedBatchCode}
+                      required
+                    >
+                      {#each $batches as batch}
+                        <option value={batch.batchcode}>
+                          {batch.batchcode} ({batch.itemname})
+                        </option>
+                      {/each}
+                    </select>
                   {:else}
                     {r.batchcode ?? 'N/A'}
                   {/if}
@@ -384,42 +444,80 @@
                 <td>{r.itemname ?? 'N/A'}</td>
                 <td>
                   {#if $editingOutId === r.outid}
-                     <select class="edit-input" bind:value={editedCustCode} required>
-                        {#each $customers as customer}
-                            <option value={customer.custcode}>{customer.custname} ({customer.custcode})</option>
-                        {/each}
-                     </select>
+                    <select
+                      class="edit-input"
+                      bind:value={editedCustCode}
+                      required
+                    >
+                      {#each $customers as customer}
+                        <option value={customer.custcode}
+                          >{customer.custname} ({customer.custcode})</option
+                        >
+                      {/each}
+                    </select>
                   {:else}
                     {r.custname ?? 'N/A'} ({r.custcode ?? 'N/A'})
                   {/if}
                 </td>
                 <td>
                   {#if $editingOutId === r.outid}
-                    <input class="edit-input" type="number" bind:value={editedQty} min="0.001" step="0.001" required />
+                    <input
+                      class="edit-input"
+                      type="number"
+                      bind:value={editedQty}
+                      min="0.001"
+                      step="0.001"
+                      required
+                    />
                   {:else}
                     {formatFloat(r.qty)}
                   {/if}
                 </td>
                 <td>
                   {#if $editingOutId === r.outid}
-                    <input class="edit-input" type="number" bind:value={editedSellingPrice} min="0" step="0.001" required />
+                    <input
+                      class="edit-input"
+                      type="number"
+                      bind:value={editedSellingPrice}
+                      min="0"
+                      step="0.001"
+                      required
+                    />
                   {:else}
                     {formatCurrency(r.selling_price_per_unit)}
                   {/if}
                 </td>
                 <td>
                   {#if $editingOutId === r.outid}
-                    <input class="edit-input" type="text" bind:value={editedDateOut} use:flatpickrAction={editedDateOut} required />
+                    <input
+                      class="edit-input"
+                      type="text"
+                      bind:value={editedDateOut}
+                      use:flatpickrAction={editedDateOut}
+                      required
+                    />
                   {:else}
                     {formatDateForDisplay(r.dateout)}
                   {/if}
                 </td>
                 <td>
                   {#if $editingOutId === r.outid}
-                    <button class="btn save-btn" on:click={() => saveEdit(r.outid)} title="Save Changes">Save</button>
-                    <button class="btn cancel-btn" on:click={cancelEdit} title="Cancel Edit">Cancel</button>
+                    <button
+                      class="btn save-btn"
+                      on:click={() => saveEdit(r.outid)}
+                      title="Save Changes">Save</button
+                    >
+                    <button
+                      class="btn cancel-btn"
+                      on:click={cancelEdit}
+                      title="Cancel Edit">Cancel</button
+                    >
                   {:else}
-                    <button class="btn edit-btn" on:click={() => startEdit(r)} title="Edit Record">Edit</button>
+                    <button
+                      class="btn edit-btn"
+                      on:click={() => startEdit(r)}
+                      title="Edit Record">Edit</button
+                    >
                   {/if}
                 </td>
               </tr>
@@ -533,7 +631,8 @@
     color: #6c757d;
     margin-bottom: 0.25rem;
   }
-  .add-form input, .add-form select {
+  .add-form input,
+  .add-form select {
     width: 100%;
     padding: 0.6rem;
     border: 1px solid #ced4da;
@@ -592,9 +691,9 @@
     box-sizing: border-box;
   }
   select.edit-input {
-      min-width: 150px;
+    min-width: 150px;
   }
-  
+
   /* --- Status Messaging --- */
   .status {
     text-align: center;

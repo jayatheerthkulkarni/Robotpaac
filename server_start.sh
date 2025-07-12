@@ -6,4 +6,5 @@ echo -e "\033[32mStarting the server at the specified port\033[0m"
 cd route
 
 # Start the server using bun, bun is taken care of docker
+bun i
 bun main.js

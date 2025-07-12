@@ -24,12 +24,20 @@
 
 You can paste these commands 
 in Git bash to run 
-(If you have `make` installed).
-`bun i`
-and `cd route` `bun i`.
+Installing bun run time is recommended 
+but if you want to use node
+You can edit the make file and it will be just fine.
 
-After the packages are installed you can do 
-`cd ..` and `make`
+Use can use these commands to run.
+
+`make` in the main directory
+and the suggested port is 
+3000,
+you can change the port only if you want to change the frontend APIs.
+
+The codebase itself is a prototype
+has a lot of non standard practices, which will be slowly removed.
+
 
 ## Database Setup
 
